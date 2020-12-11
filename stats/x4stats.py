@@ -18,6 +18,7 @@ class X4stats:
             # pd.set_option('display.max_rows', None)
             self.own_ships, self.own_ship_ids = self.__calc_ship_info()
             self.sales = self.__calc_sales()
+            # print(self.sales.loc[self.sales["ship_name"] == 'TD Deimos'])
 
             # get rid of large xml in memory
             self.xmltree = None
@@ -32,10 +33,10 @@ class X4stats:
 
     def get_df_sales(self, hours=None):
         df = self.sales.copy()
-        print(df)
         if hours:
+            # uren beginnen te tellen bij 0. Laatste 1 uur is dus uur <= 0
+            hours = int(hours) - 1
             df = df.query("hours_since_event <= " + str(hours))
-        print(df)
         return df
 
     def get_df_per_ship(self, hours=None):
@@ -63,9 +64,11 @@ class X4stats:
 
             try:
                 if elem.attrib["seller"] in self.own_ship_ids:
+                    volume = float(elem.attrib["v"])
                     if "price" in elem.attrib:
-                        value = elem.attrib["price"]
-                        sales = elem.attrib["price"]
+                        # prijs is in centen
+                        value = volume * float(elem.attrib["price"]) / 100
+                        sales = volume * float(elem.attrib["price"]) / 100
                     else:
                         value = None
                         sales = None
@@ -75,15 +78,16 @@ class X4stats:
                         "value": value,
                         "sales": sales,
                         "costs": 0,
-                        "volume": elem.attrib["v"],
+                        "volume": volume,
                         "ware": elem.attrib["ware"],
                     }
                     sales_list = self.append_sales_list(sales_list, sale)
 
                 if "buyer" in elem.attrib and elem.attrib["buyer"] in self.own_ship_ids:
+                    volume = float(elem.attrib["v"])
                     if "price" in elem.attrib:
-                        value = -1 * float(elem.attrib["price"])
-                        costs = elem.attrib["price"]
+                        value = -1 * volume * float(elem.attrib["price"]) / 100
+                        costs = volume * float(elem.attrib["price"]) / 100
                     else:
                         value = None
                         costs = None
@@ -93,7 +97,7 @@ class X4stats:
                         "value": value,
                         "sales": 0,
                         "costs": costs,
-                        "volume": elem.attrib["v"],
+                        "volume": volume,
                         "ware": elem.attrib["ware"],
                     }
                     sales_list = self.append_sales_list(sales_list, sale)
