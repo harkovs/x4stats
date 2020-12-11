@@ -33,6 +33,7 @@ def get_ware_sales_pie(df):
         font_color=colors['text'],
         separators='.,',
     )
+    ware_sales_pie.update_traces(textposition='inside')
     return ware_sales_pie.to_html()
 
 
@@ -49,6 +50,7 @@ def get_ware_costs_pie(df):
         font_color=colors['text'],
         separators='.,',
     )
+    ware_costs_pie.update_traces(textposition='inside')
     return ware_costs_pie.to_html()
 
 
