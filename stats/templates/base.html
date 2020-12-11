@@ -1,0 +1,35 @@
+{% extends "bootstrap/base.html" %}
+
+{% block styles %}
+{{super()}}
+<link rel="stylesheet"
+      href="{{ url_for('static', filename='styles/style.css') }}">
+
+{% endblock %}
+
+{% block title %}X4 start{% endblock %}
+
+{% block navbar %}
+<nav class="navbar navbar-default">
+
+    <div class="container">
+        <div class="navbar-header">
+            <ul class="nav navbar-nav">
+                <li><a href="{{ url_for('stats') }}">X4Stats</a></li>
+                <li class="dropdown">
+                    <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="true"> <span class="nav-label">Timeframe</span> <span class="caret"></span></a>
+                    <ul class="dropdown-menu">
+                         <li><a href="{{ url_for('stats') }}/1">1 hour</a></li>
+                        <li><a href="{{ url_for('stats') }}/2">2 hours</a></li>
+                        <li><a href="{{ url_for('stats') }}/3">3 hours</a></li>
+                        <li><a href="{{ url_for('stats') }}/5">5 hours</a></li>
+                        <li><a href="{{ url_for('stats') }}/10">10 hours</a></li>
+                        <li><a href="{{ url_for('stats') }}/25">25 hours</a></li>
+                        <li><a href="{{ url_for('stats') }}">All (since 4.0)</a></li>
+                    </ul>
+                </li>
+            </ul>
+        </div>
+    </div>
+</nav>
+{% endblock %}

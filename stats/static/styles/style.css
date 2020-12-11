@@ -1,0 +1,24 @@
+html {
+  font-size: 62.5%; }
+body {
+  background-color: #0a0a0a;
+  font-size: 1.5em;
+  line-height: 1.6;
+  font-weight: 400;
+  font-family: "Open Sans", "HelveticaNeue", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  color: #FFFFFF;
+}
+
+div {text-align: center;}
+
+#wrapper {
+    width: 100%;
+    overflow: hidden;
+}
+#first {
+    width: 50%;
+    float:left;
+}
+#second {
+    overflow: hidden;
+}

@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="center">
+    <h2>Game stats for {{ hours | safe }} at {{ game_time | safe }} hours of game time</h2>
+    <h2>Profit: {{ profit }} </h2>
+    {{ profit_histogram | safe }}
+    {{ scatter_margin_profit | safe }}
+    <div id="wrapper">
+        <div id="first">{{ w_sales_pie | safe }}</div>
+        <div id="second">{{ w_costs_pie | safe }}</div>
+    </div>
+    <h3>Raw ship statistics</h3>
+    {{ table_per_ship | safe }}
+
+</div>
+{% endblock %}

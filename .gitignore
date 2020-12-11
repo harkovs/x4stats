@@ -1,0 +1,8 @@
+venv/
+stats/saves/*
+!stats/saves/.gitkeep
+config.py
+.git/
+.idea
+x4stats.egg-info/
+stats.egg-info/
