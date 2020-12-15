@@ -3,6 +3,7 @@ from flask import render_template
 from stats.x4stats import X4stats
 import plotly.graph_objects as go
 from flask_bootstrap import Bootstrap
+from pathlib import Path
 
 app = Flask(__name__)
 app.config.from_pyfile('config.py')
@@ -17,7 +18,17 @@ colors = {
 }
 colors_bar = ['#005e85', '#f27800', '#c90c0f', '#85858b', '#eaaf32', '#f08971', '#cbcbd4']
 
-x4stats = X4stats(app.config["SAVE_LOCATION"])
+# Check config
+save_location = app.config["SAVE_LOCATION"]
+p = Path(save_location)
+if not p.exists():
+    print("SAVE_LOCATION does not exist. Check config.py file.")
+    quit()
+
+# save ophalen
+x4stats = X4stats(
+    save_location=save_location
+)
 
 
 def get_ware_sales_pie(df):
@@ -95,7 +106,7 @@ def get_scatter_margin_profit(df):
             y=df["margin"],
             mode='markers',
             name='markers',
-            text=df["ship_name"]
+            text=df["commander_name"]
         )
     )
     fig.update_layout(
@@ -103,7 +114,7 @@ def get_scatter_margin_profit(df):
         paper_bgcolor=colors['background'],
         font_color=colors['text'],
         height=900,
-        title='Profit (x-axis) and margin (y-axis)',
+        title='Profit (x-axis) and margin (y-axis) including subordinates',
         xaxis_showgrid=False,
         yaxis_showgrid=False,
         separators='.,',
@@ -116,23 +127,26 @@ def get_table_per_ship(df):
         header=dict(values=list(df.columns),
                     fill_color=colors['background'],
                     font_color=colors['text'],
+                    line_color='darkslategray',
                     align='left'),
         cells=dict(
             values=[
                 df["ship_id"]
                 , df["ship_class"]
                 , df["commander_name"]
+                , df["default_order"]
                 , df["ship_code"]
                 , df["ship_name"]
                 , df["ship_type"]
-                , df["value"]
-                , df["sales"]
-                , df["costs"]
-                , df["volume"]
+                , df["value"].apply(number_formatter)
+                , df["sales"].apply(number_formatter)
+                , df["costs"].apply(number_formatter)
+                , df["volume"].apply(number_formatter)
                 , df["margin"]
                ],
             fill_color=colors['background'],
             font_color=colors['text'],
+            line_color='darkslategray',
             align='left'))
     ])
     fig.update_layout(
@@ -144,6 +158,44 @@ def get_table_per_ship(df):
     return fig.to_html()
 
 
+def get_transactions_per_ship(df):
+    cols = ["name", "code", "commander", "time", "hours_since_event", "ware", "value", "volume"]
+    fig = go.Figure(data=[go.Table(
+        header=dict(values=list(cols),
+                    fill_color=colors['background'],
+                    font_color=colors['text'],
+                    line_color='darkslategray',
+                    align='left'),
+        cells=dict(
+            values=[
+                df["ship_name"]
+                , df["ship_code"]
+                , df["commander_name"]
+                , df["time"]
+                , df["hours_since_event"]
+                , df["ware"]
+                , df["value"].apply(number_formatter)
+                , df["volume"].apply(number_formatter)
+            ],
+            fill_color=colors['background'],
+            font_color=colors['text'],
+            line_color='darkslategray',
+            align='left'))
+    ])
+    fig.update_layout(
+        plot_bgcolor=colors['background'],
+        paper_bgcolor=colors['background'],
+        height=900,
+
+
+    )
+    return fig.to_html()
+
+
+def number_formatter(n):
+    return f'{int(n):,}'.replace(',', '.')
+
+
 @app.route('/', methods=['GET'])
 def index():
     return ''
@@ -152,20 +204,21 @@ def index():
 @app.route('/stats', methods=['GET'])
 @app.route('/stats/<hours>', methods=['GET'])
 def stats(hours=None):
-    df_sales = x4stats.get_df_sales(hours)
+    df_sales = x4stats.get_df_sales(hours, filter_zero_value=True)
     df_per_ship = x4stats.get_df_per_ship(hours)
+    df_per_commander = x4stats.get_df_per_commander(hours)
 
     game_time = str(round(x4stats.get_game_time() / 3600, 2))
     profit = f'{int(x4stats.get_profit(df_sales)):,}'.replace(',', '.')
     w_sales_pie = get_ware_sales_pie(df_sales)
     w_costs_pie = get_ware_costs_pie(df_sales)
     profit_histogram = get_profit_per_commander(df_sales)
-    scatter_margin_profit = get_scatter_margin_profit(df_per_ship)
+    scatter_margin_profit = get_scatter_margin_profit(df_per_commander)
     table_per_ship = get_table_per_ship(df_per_ship)
 
     hours_par = "all time"
     if hours:
-        hours_par = str(hours) + " hours"
+        hours_par = "past " + str(hours) + " hours"
     return render_template(
         'index.html',
         profit_histogram=profit_histogram,
@@ -177,6 +230,27 @@ def stats(hours=None):
         hours=hours_par,
         table_per_ship=table_per_ship
     )
+
+
+@app.route('/transactions', methods=['GET'])
+@app.route('/transactions/<hours>', methods=['GET'])
+def transactions(hours=None):
+    df_sales = x4stats.get_df_sales_sorted(hours, filter_zero_value=True)
+    transactions_per_ship = get_transactions_per_ship(df_sales)
+    hours_par = "all time"
+    if hours:
+        hours_par = "past " + str(hours) + " hours"
+    return render_template(
+        'transactions.html',
+        transactions_per_ship=transactions_per_ship,
+        hours=hours_par,
+    )
+
+
+@app.route('/reload', methods=['GET'])
+def reload():
+    x4stats.check_for_new_file()
+    return stats()
 
 
 def main():

@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="center">
+    <h2>Transactions for {{ hours | safe }} hours of game time</h2>
+    {{ transactions_per_ship | safe }}
+
+</div>
+{% endblock %}
