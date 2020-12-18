@@ -250,8 +250,10 @@ def stats(hours=None):
     table_per_ship = get_table_per_ship(df_per_ship)
 
     hours_par = "all time"
+    hours_raw = ''
     if hours:
         hours_par = "past " + str(hours) + " hours"
+        hours_raw = hours
     return render_template(
         'index.html',
         profit_histogram=profit_histogram,
@@ -261,6 +263,7 @@ def stats(hours=None):
         game_time=game_time,
         profit=profit,
         hours=hours_par,
+        hours_raw=hours_raw,
         inactive_traders=inactive_traders,
         table_per_ship=table_per_ship,
     )
@@ -272,19 +275,23 @@ def transactions(hours=None):
     df_sales = x4stats.get_df_sales_sorted(hours, filter_zero_value=True)
     transactions_per_ship = get_transactions_per_ship(df_sales)
     hours_par = "all time"
+    hours_raw = ''
     if hours:
         hours_par = "past " + str(hours) + " hours"
+        hours_raw = hours
     return render_template(
         'transactions.html',
         transactions_per_ship=transactions_per_ship,
         hours=hours_par,
+        hours_raw=hours_raw,
     )
 
 
 @app.route('/reload', methods=['GET'])
-def reload():
+@app.route('/reload/<hours>', methods=['GET'])
+def reload(hours=None):
     x4stats.check_for_new_file()
-    return stats()
+    return stats(hours)
 
 
 def main():

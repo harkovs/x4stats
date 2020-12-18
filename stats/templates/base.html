@@ -41,7 +41,7 @@
                         <li><a href="{{ url_for('transactions') }}">All (since 4.0)</a></li>
                     </ul>
                 </li>
-                <li><a href="{{ url_for('reload') }}">Update save</a></li>
+                <li><a href="{{ url_for('reload') }}/{{ hours_raw | safe }}">Update save</a></li>
             </ul>
         </div>
     </div>
