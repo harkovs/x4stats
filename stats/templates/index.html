@@ -10,6 +10,8 @@
         <div id="first">{{ w_sales_pie | safe }}</div>
         <div id="second">{{ w_costs_pie | safe }}</div>
     </div>
+    <h3>Inactive traders and miners (no trade value in {{ hours | safe }})</h3>
+    {{ inactive_traders | safe }}
     <h3>Raw ship statistics</h3>
     {{ table_per_ship | safe }}
 

@@ -122,6 +122,38 @@ def get_scatter_margin_profit(df):
     return fig.to_html()
 
 
+def get_table_inactive_traders_miners(df):
+    fig = go.Figure(data=[go.Table(
+        header=dict(values=list(['commander_name', 'default_order', 'ship_code', 'ship_name', 'ship_type'
+                                    , 'value', 'volume']),
+                    fill_color=colors['background'],
+                    font_color=colors['text'],
+                    line_color='darkslategray',
+                    align='left'),
+        cells=dict(
+            values=[
+                df["commander_name"]
+                , df["default_order"]
+                , df["ship_code"]
+                , df["ship_name"]
+                , df["ship_type"]
+                , df["value"].apply(number_formatter)
+                , df["volume"].apply(number_formatter)
+            ],
+            fill_color=colors['background'],
+            font_color=colors['text'],
+            line_color='darkslategray',
+            align='left'))
+    ])
+    fig.update_layout(
+        plot_bgcolor=colors['background'],
+        paper_bgcolor=colors['background'],
+        height=330,
+
+    )
+    return fig.to_html()
+
+
 def get_table_per_ship(df):
     fig = go.Figure(data=[go.Table(
         header=dict(values=list(df.columns),
@@ -147,13 +179,12 @@ def get_table_per_ship(df):
             fill_color=colors['background'],
             font_color=colors['text'],
             line_color='darkslategray',
-            align='left'))
+            align='left')),
     ])
     fig.update_layout(
         plot_bgcolor=colors['background'],
         paper_bgcolor=colors['background'],
         height=900,
-
     )
     return fig.to_html()
 
@@ -207,6 +238,7 @@ def stats(hours=None):
     df_sales = x4stats.get_df_sales(hours, filter_zero_value=True)
     df_per_ship = x4stats.get_df_per_ship(hours)
     df_per_commander = x4stats.get_df_per_commander(hours)
+    df_inactive_traders = x4stats.get_idle_traders_miners(hours)
 
     game_time = str(round(x4stats.get_game_time() / 3600, 2))
     profit = f'{int(x4stats.get_profit(df_sales)):,}'.replace(',', '.')
@@ -214,6 +246,7 @@ def stats(hours=None):
     w_costs_pie = get_ware_costs_pie(df_sales)
     profit_histogram = get_profit_per_commander(df_sales)
     scatter_margin_profit = get_scatter_margin_profit(df_per_commander)
+    inactive_traders = get_table_inactive_traders_miners(df_inactive_traders)
     table_per_ship = get_table_per_ship(df_per_ship)
 
     hours_par = "all time"
@@ -228,7 +261,8 @@ def stats(hours=None):
         game_time=game_time,
         profit=profit,
         hours=hours_par,
-        table_per_ship=table_per_ship
+        inactive_traders=inactive_traders,
+        table_per_ship=table_per_ship,
     )
 
 

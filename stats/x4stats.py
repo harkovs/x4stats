@@ -8,6 +8,30 @@ import os
 import time
 import shutil
 
+# trade or mining orders
+ECO_ORDERS = [
+    'MiningRoutine_Basic'
+    , 'MiningRoutine'
+    , 'MiningRoutine_Advanced'
+    , 'MiddleMan'
+    , 'TradeRoutine'
+    , 'TradeRouttine_Basic'
+    , 'TradeRouttine_Advanced'
+    , 'FindBuildTasks'
+    ]
+SHIP_CLASSES = [
+    'ship_s'
+    , 'ship_m'
+    , 'ship_l'
+    , 'ship_xl'
+    , 'ship_s'
+    , 'ship_s'
+]
+
+STATION_CLASSES = ['station']
+PLAYER_CLASSES = ['players']
+ALL_CLASSES = SHIP_CLASSES + STATION_CLASSES + PLAYER_CLASSES
+
 
 class X4stats:
 
@@ -97,6 +121,17 @@ class X4stats:
 
         return df_per_ship
 
+    # geen trade waarde in de laatste X uren, maar wel trade orders
+    def get_idle_traders_miners(self, hours):
+        df = self.__calc_df_per_ship(hours)
+        return df.loc[
+            (df['default_order'].isin(ECO_ORDERS))
+            & (df['ship_class'].isin(SHIP_CLASSES))
+            & (df['value'] == 0)
+        ]
+
+    # df['ship_class'].isin(SHIP_CLASSES), df['value'] == 0
+
     def get_df_per_commander(self, hours=None):
         return self.__calc_df_per_commander(hours)
 
@@ -169,7 +204,7 @@ class X4stats:
 
         # Add ships with trade/mine orders and stations to make sure they are displayed even without trade value.
         for ship in self.own_ships:
-            if ship["class"] in ('station', 'player') or ship["default_order"]:
+            if ship["class"] in (SHIP_CLASSES + PLAYER_CLASSES) or ship["default_order"]:
                 sale = {
                     "time": self.game_time,
                     "ship_id": ship["id"],
@@ -235,12 +270,7 @@ class X4stats:
         ids = []
         player_id = None
         for elem in self.xmltree.findall("./universe/component/connections//component[@owner='player']"):
-            if "class" in elem.attrib and elem.attrib["class"] in ("ship_s"
-                                                                    , "ship_m"
-                                                                    , "ship_l"
-                                                                    , "ship_xl"
-                                                                    , "station"
-                                                                    , "player"):
+            if "class" in elem.attrib and elem.attrib["class"] in ALL_CLASSES:
                 try:
                     ship_type = None
                     ship_id = None
@@ -263,13 +293,13 @@ class X4stats:
                     else:
                         name = code
 
-                    if ship_class == 'station':
+                    if ship_class in STATION_CLASSES:
                         # subordinate connections zoeken voor stations
                         for sub_con in elem.findall(".//connection[@connection='subordinates']"):
                             subordinates_cons.append(sub_con.attrib["id"])
 
                     # commander connections zoeken voor schepen
-                    if ship_class != 'station':
+                    if ship_class in SHIP_CLASSES:
                         for com_con in elem.findall(".//connection[@connection='commander']/connected"):
                             commander_cons.append(com_con.attrib["connection"])
                         # default orders opzoeken
@@ -290,7 +320,7 @@ class X4stats:
                     })
                     ids.append(ship_id)
 
-                    if ship_class == 'player':
+                    if ship_class in PLAYER_CLASSES:
                         player_id = info[-1]["id"]
 
                 except KeyError as e:
