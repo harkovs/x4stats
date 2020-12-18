@@ -46,4 +46,7 @@ http://localhost:2992/stats
 Anytime you want to start the program you will first have to open the main directory in cmd.exe and run  
 ```
 venv\Scripts\activate.bat && x4stats
-```
+```  
+
+Preview:  
+![preview image](https://github.com/harkovs/x4stats/blob/main/stats/static/images/example.png?raw=true)
