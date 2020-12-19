@@ -29,7 +29,7 @@ SHIP_CLASSES = [
 ]
 
 STATION_CLASSES = ['station']
-PLAYER_CLASSES = ['players']
+PLAYER_CLASSES = ['player']
 ALL_CLASSES = SHIP_CLASSES + STATION_CLASSES + PLAYER_CLASSES
 
 
@@ -47,6 +47,7 @@ class X4stats:
         self.save_location = save_location
         self.save_mtime = None
         self.check_for_new_file()
+        # print(self.player_id)
 
     def check_for_new_file(self):
         # dir of file
