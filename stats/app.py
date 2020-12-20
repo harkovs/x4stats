@@ -288,6 +288,7 @@ def transactions(hours=None):
 
 
 @app.route('/reload', methods=['GET'])
+@app.route('/reload/', methods=['GET'])
 @app.route('/reload/<hours>', methods=['GET'])
 def reload(hours=None):
     x4stats.check_for_new_file()
