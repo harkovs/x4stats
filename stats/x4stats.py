@@ -53,8 +53,15 @@ class X4stats:
         # dir of file
         p = Path(self.save_location)
         if p.is_dir():
-            paths = sorted(p.iterdir(), key=os.path.getmtime)
-            p = paths[-1]
+            paths = sorted(p.iterdir(), key=os.path.getmtime, reverse=True)
+
+            i = 0
+            p = None
+            while i < len(paths) and not p:
+                if paths[i].suffix.lower() == '.gz':
+                    p = paths[i]
+                i = i + 1
+
         mtime = os.path.getmtime(p)
         # (New) file found. Give is 10 seconds to write
         if not self.save_mtime or (self.save_mtime < mtime and (time.time() - mtime) > 10):
