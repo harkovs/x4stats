@@ -1,3 +1,4 @@
+import datetime
 import xml.etree.ElementTree as ET
 import gzip
 import pandas as pd
@@ -7,30 +8,8 @@ from pathlib import Path
 import os
 import time
 import shutil
-
-# trade or mining orders
-ECO_ORDERS = [
-    'MiningRoutine_Basic'
-    , 'MiningRoutine'
-    , 'MiningRoutine_Advanced'
-    , 'MiddleMan'
-    , 'TradeRoutine'
-    , 'TradeRouttine_Basic'
-    , 'TradeRouttine_Advanced'
-    , 'FindBuildTasks'
-    ]
-SHIP_CLASSES = [
-    'ship_s'
-    , 'ship_m'
-    , 'ship_l'
-    , 'ship_xl'
-    , 'ship_s'
-    , 'ship_s'
-]
-
-STATION_CLASSES = ['station']
-PLAYER_CLASSES = ['player']
-ALL_CLASSES = SHIP_CLASSES + STATION_CLASSES + PLAYER_CLASSES
+from stats.constants import ECO_ORDERS, SHIP_CLASSES, STATION_CLASSES, PLAYER_CLASSES, ALL_CLASSES, LOAD_MESSAGES
+import random
 
 
 class X4stats:
@@ -47,6 +26,7 @@ class X4stats:
         self.save_location = save_location
         self.save_mtime = None
         self.check_for_new_file()
+        pd.set_option('display.max_rows', None)
         # print(self.player_id)
 
     def check_for_new_file(self):
@@ -68,33 +48,134 @@ class X4stats:
             self.save_mtime = mtime
             # copy to minimize interruption for the game
             p_to = Path('stats/saves/savegame_wrk.gz')
-            shutil.copy(p, p_to)
+            # Try to copy, if a same file error is raised pass since files are identical
+            try:
+                shutil.copy(p, p_to)
+            except shutil.SameFileError:
+                pass
             # trigger reload
             print(" * New save loading: " + str(p))
             self.reload(p_to)
 
     # (re)load save file
     def reload(self, save):
-        with gzip.open(save) as f:
-            self.xmltree = ET.parse(f).getroot()
-            self.game_time = self.__calc_game_time()
-            pd.set_option('display.max_rows', None)
-            # Find all player owned ships and stations
-            self.own_ships, self.own_ship_ids, self.player_id = self.__calc_ship_info()
-            self.sales = self.__calc_sales()
-            # print(self.sales.loc[self.sales["ship_name"] == 'TD Deimos'])
 
-            # get rid of large xml in memory
-            self.xmltree = None
-            print(" * Loading complete")
+        process_start_time = datetime.datetime.now()
+
+        assets = []
+        trades = []
+        transfers = []
+        default_orders = []
+        # Type of entry
+        entries_type = None
+        entries_condensed = False
+        connections = []
+        cur_player_entity = None
+        cur_connection_type = None
+        cur_connection_id = None
+        connection_types = ['subordinates', 'commander']
+
+        with gzip.open(save) as f:
+            path = []
+            xml = ET.iterparse(f, events=('start', 'end'))
+
+            # Build path with every start and remove with every end event
+            for event, elem in xml:
+                if event == 'start':
+                    path.append(elem.tag)
+                    # Get game start time
+                    if path == ['savegame', 'info', 'game']:
+                        self.game_time = float(elem.attrib['time'])
+                    elif path == ['savegame', 'economylog', 'entries']:
+                        entries_type = elem.attrib['type']
+                        # check for condensed money log
+                        if 'condensed' in elem.attrib and elem.attrib['condensed'] == 1:
+                            entries_condensed = True
+                        else:
+                            entries_condensed = False
+                    # get trades
+                    elif path == ['savegame', 'economylog', 'entries', 'log'] and entries_type == 'trade':
+                        trades.append(elem.attrib)
+                    # Get money transfers
+                    elif path == ['savegame', 'economylog', 'entries', 'log'] and entries_type == 'money':
+                        # Only include uncondensed transfers
+                        if not entries_condensed:
+                            transfers.append(elem.attrib)
+                    # get player asset info
+                    elif (path[0:4] == ['savegame', 'universe', 'component', 'connections']
+                            and elem.tag == 'component'
+                            and 'owner' in elem.attrib
+                            and elem.attrib['owner'] == 'player'):
+                        # store id for commander/subordinate connections
+                        cur_player_entity = elem.attrib['id']
+                        assets.append(elem.attrib)
+                    # check for subordinates and commander connections
+                    elif (cur_player_entity
+                          and elem.tag == 'connection'
+                          and elem.attrib['connection'] in connection_types):
+                        cur_connection_type = elem.attrib['connection']
+                        cur_connection_id = elem.attrib['id']
+                    elif cur_player_entity and cur_connection_type in connection_types and elem.tag == 'connected':
+                        connections.append({
+                            "player_entity": cur_player_entity,
+                            "connection_type": cur_connection_type,
+                            "connection_id": cur_connection_id,
+                            "connection": elem.attrib['connection']
+                        })
+                    # Get default order
+                    elif (cur_player_entity
+                          and elem.tag == 'order'
+                          and 'default' in elem.attrib
+                          and 'order' in elem.attrib):
+                        default_orders.append({
+                            'player_entity': cur_player_entity,
+                            'order': elem.attrib['order']
+                        })
+                if event == 'end':
+                    # remove current player ship entry
+                    if (path[0:4] == ['savegame', 'universe', 'component', 'connections']
+                          and elem.tag == 'component'
+                          and 'owner' in elem.attrib
+                          and elem.attrib['owner'] == 'player'):
+                        cur_player_entity = None
+                    # Remove connection type subordinates
+                    elif (cur_player_entity
+                          and elem.tag == 'connection'
+                          and elem.attrib['connection'] in connection_types):
+                        cur_connection_type = None
+                        cur_connection_id = None
+                    # remove last value in path
+                    path.pop()
+                    # clear elem from memory
+                    elem.clear()
+
+            process_end_time = datetime.datetime.now()
+            process_time = process_end_time - process_start_time
+            process_time = round(process_time.total_seconds(), 2)
+
+            print(' * Processed xml in', str(process_time), 'seconds')
+
+        # Find all player owned ships and stations
+        self.own_ships, self.own_ship_ids, self.player_id = self.__calc_ship_info(
+            assets=assets,
+            connections=connections,
+            orders=default_orders)
+        self.print_random_load_msg()
+
+        # calculate sales
+        self.sales = self.__calc_sales(
+            trades=trades,
+            transfers=transfers
+        )
+        print(self.sales)
+        self.print_random_load_msg()
+
+        xml = None
+
+        print(" * Loading complete")
 
     def get_game_time(self):
         return self.game_time
-
-    def __calc_game_time(self):
-        for elem in self.xmltree.findall("./info/game"):
-            # print(elem.attrib["time"])
-            return float(elem.attrib["time"])
 
     def get_df_sales(self, hours=None, filter_zero_value=False):
         df = self.sales.copy()
@@ -169,45 +250,47 @@ class X4stats:
         return df_perx
 
     # Loop through all trade transactions to collect transactions where the player is seller or buyer
-    def __calc_sales(self):
+    def __calc_sales(self, trades, transfers):
         sales_list = []
-        for elem in self.xmltree.findall("./economylog/entries[@type='trade']/log[@seller]"):
+        for elem in trades:
 
             try:
-                if elem.attrib["seller"] in self.own_ship_ids and "price" in elem.attrib:
-                    volume = float(elem.attrib["v"])
+                if ('seller' in elem
+                        and elem["seller"] in self.own_ship_ids
+                        and "price" in elem):
+                    volume = float(elem["v"])
                     # prijs is in centen
-                    value = volume * float(elem.attrib["price"]) / 100
-                    sales = volume * float(elem.attrib["price"]) / 100
+                    value = volume * float(elem["price"]) / 100
+                    sales = volume * float(elem["price"]) / 100
                     sale = {
-                        "time": elem.attrib["time"],
-                        "ship_id": elem.attrib["seller"],
+                        "time": elem["time"],
+                        "ship_id": elem["seller"],
                         "value": value,
                         "sales": sales,
                         "costs": 0,
                         "volume": volume,
-                        "ware": elem.attrib["ware"],
+                        "ware": elem["ware"],
                     }
                     sales_list = self.__append_sales_list(sales_list, sale)
 
-                if "buyer" in elem.attrib and elem.attrib["buyer"] in self.own_ship_ids and "price" in elem.attrib:
-                    volume = float(elem.attrib["v"])
-                    value = -1 * volume * float(elem.attrib["price"]) / 100
-                    costs = volume * float(elem.attrib["price"]) / 100
-                    sale = {
-                        "time": elem.attrib["time"],
-                        "ship_id": elem.attrib["buyer"],
-                        "value": value,
-                        "sales": 0,
-                        "costs": costs,
-                        "volume": volume,
-                        "ware": elem.attrib["ware"],
-                    }
-                    sales_list = self.__append_sales_list(sales_list, sale)
+                    if "buyer" in elem and elem["buyer"] in self.own_ship_ids and "price" in elem:
+                        volume = float(elem["v"])
+                        value = -1 * volume * float(elem["price"]) / 100
+                        costs = volume * float(elem["price"]) / 100
+                        sale = {
+                            "time": elem["time"],
+                            "ship_id": elem["buyer"],
+                            "value": value,
+                            "sales": 0,
+                            "costs": costs,
+                            "volume": volume,
+                            "ware": elem["ware"],
+                        }
+                        sales_list = self.__append_sales_list(sales_list, sale)
 
             except KeyError as e:
                 print(str(type(e)))
-                print(elem.attrib)
+                print(elem)
                 raise
 
         # Add ships with trade/mine orders and stations to make sure they are displayed even without trade value.
@@ -225,7 +308,7 @@ class X4stats:
                 sales_list = self.__append_sales_list(sales_list, sale)
 
         # transfers van station accounts
-        account_mutations = self.__calc_account_mutations()
+        account_mutations = self.__calc_account_mutations(transfers=transfers)
         for m in account_mutations:
             sales_list = self.__append_sales_list(sales_list, m)
 
@@ -239,7 +322,7 @@ class X4stats:
             df["costs"] = df["costs"].astype(float)
         except KeyError as e:
             print(str(e))
-            print('No records found. Is the game version at 4.00 or higher?')
+            print('No records found. Is the game version >= 4.00?')
             raise
         # hour passed since event
         df["hours_since_event"] = df["time"].apply(self.hours_passed)
@@ -273,12 +356,15 @@ class X4stats:
         return sales_list
 
     # Return tuple with players ship/station info and ids
-    def __calc_ship_info(self):
+    def __calc_ship_info(self, assets, connections, orders):
         info = []
         ids = []
         player_id = None
-        for elem in self.xmltree.findall("./universe/component/connections//component[@owner='player']"):
-            if "class" in elem.attrib and elem.attrib["class"] in ALL_CLASSES:
+
+        for elem in assets:
+
+            if "class" in elem and elem["class"] in ALL_CLASSES:
+
                 try:
                     ship_type = None
                     ship_id = None
@@ -287,32 +373,35 @@ class X4stats:
                     commander_cons = []
                     commander_id = None
                     commander_name = None
-                    ship_class = elem.attrib["class"]
+                    ship_class = elem["class"]
                     default_order = None
 
-                    if "macro" in elem.attrib:
-                        ship_type = elem.attrib["macro"]
-                    if "id" in elem.attrib:
-                        ship_id = elem.attrib["id"]
-                    if "code" in elem.attrib:
-                        code = elem.attrib["code"]
-                    if "name" in elem.attrib:
-                        name = elem.attrib["name"]
+                    if "macro" in elem:
+                        ship_type = elem["macro"]
+                    if "id" in elem:
+                        ship_id = elem["id"]
+                    if "code" in elem:
+                        code = elem["code"]
+                    if "name" in elem:
+                        name = elem["name"]
                     else:
                         name = code
 
                     if ship_class in STATION_CLASSES:
                         # subordinate connections zoeken voor stations
-                        for sub_con in elem.findall(".//connection[@connection='subordinates']"):
-                            subordinates_cons.append(sub_con.attrib["id"])
+                        for con in connections:
+                            if con['player_entity'] == ship_id and con['connection_type'] == 'subordinates':
+                                subordinates_cons.append(con['connection_id'])
 
                     # commander connections zoeken voor schepen
                     if ship_class in SHIP_CLASSES:
-                        for com_con in elem.findall(".//connection[@connection='commander']/connected"):
-                            commander_cons.append(com_con.attrib["connection"])
+                        for con in connections:
+                            if con['player_entity'] == ship_id and con['connection_type'] == 'commander':
+                                commander_cons.append(con["connection"])
                         # default orders opzoeken
-                        for d_order in elem.findall(".//orders/order[@default='1']"):
-                            default_order = d_order.attrib["order"]
+                        for d_order in orders:
+                            if d_order['player_entity'] == ship_id:
+                                default_order = d_order["order"]
 
                     info.append({
                         "type": ship_type,
@@ -333,7 +422,7 @@ class X4stats:
 
                 except KeyError as e:
                     print(str(e))
-                    print(elem.attrib)
+                    print(elem)
 
         # stations aan schepen verbinden
         for e in info:
@@ -370,49 +459,54 @@ class X4stats:
         return None
 
     # Transacties per id
-    def __calc_account_mutations(self):
+    def __calc_account_mutations(self, transfers):
+        # print('mutations')
         mutations = []
-        for elem in self.xmltree.findall("./economylog/entries[@type='money']"):
-            if "condensed" not in elem.attrib:
-                for transaction in elem.findall(".//log"):
-                    rec = {}
-                    for a in ["time", "type", "owner", "v", "partner", "tradeentry"]:
-                        if a in transaction.attrib:
-                            rec[a] = transaction.attrib[a]
-                        else:
-                            rec[a] = None
-                    # Alleen mutaties met owner en waarde
-                    if rec["owner"] in self.own_ship_ids and rec["v"]:
-                        mutations.append(rec)
 
-                # sort by owner and then time
-                mutations.sort(
-                    key=lambda l: (l["owner"], l["time"])
-                )
+        for transaction in transfers:
+            rec = {}
+            for a in ["time", "type", "owner", "v", "partner", "tradeentry"]:
+                if a in transaction:
+                    rec[a] = transaction[a]
+                else:
+                    rec[a] = None
+            # Alleen mutaties met owner en waarde
+            if rec["owner"] in self.own_ship_ids and rec["v"]:
+                mutations.append(rec)
 
-                length = len(mutations)
-                for i in range(length):
-                    previous = None
-                    current = mutations[i]
+        # sort by owner and then time
+        mutations.sort(
+            key=lambda l: (l["owner"], l["time"])
+        )
 
-                    # vorige mutatie
-                    if i > 0:
-                        previous = mutations[i-1]
+        # for m in mutations:
+        #     if m["owner"] == "[0x39312]":
+        #         print(m)
 
-                    value = 0
-                    # mutatiewaarde
-                    try:
-                        if previous and current["owner"] == previous["owner"]:
-                            value = float(current["v"])/100 - float(previous["v"])/100
-                    except TypeError as e:
-                        print("Unable to cast to float:\n" + str(previous) + "\n" + str(current))
+        length = len(mutations)
+        for i in range(length):
+            previous = None
+            current = mutations[i]
 
-                    mutations[i]["value"] = value
+            # vorige mutatie
+            if i > 0:
+                previous = mutations[i-1]
 
-        # ["time", "type", "owner", "v", "partner", "tradeentry", value]
-        # Transfers toevoegen aan sales. Mutaties van de player account tegenboeken
+            value = 0
+            # mutatiewaarde
+            try:
+                if previous and current["owner"] == previous["owner"]:
+                    value = float(current["v"])/100 - float(previous["v"])/100
+            except TypeError as e:
+                print("Unable to cast to float:\n" + str(previous) + "\n" + str(current))
+
+            mutations[i]["value"] = value
+
+        # Mutaties restock en sell ship
         sales_list = []
+        mutation_types = []
         for m in mutations:
+            # print(m)
             sales = 0
             costs = 0
             if float(m["value"]) >= 0:
@@ -420,40 +514,29 @@ class X4stats:
             else:
                 costs = float(m["value"])
 
-            if m["type"] == 'transfer' and m["owner"] != self.player_id:
+            if m["type"] in ('sellship', 'restock') and m["owner"] != self.player_id:
 
                 sale = {
                     "time": m["time"],
                     "ship_id": m["owner"],
                     "value": m["value"],
+                    "type": m['type'],
                     "sales": sales,
                     "costs": costs,
                     "volume": 0,
-                    "ware": 'ships/repairs',
+                    "ware": m["type"]
                 }
-                # print("boeking", self.get_id_attributes(m["owner"])["name"], m["value"])
                 sales_list.append(sale)
 
-            # tegenboeking speler transfers naar stations
-            elif m["type"] == 'transfer' and m["owner"] == self.player_id and m["partner"] in self.own_ship_ids:
+            if m["type"] not in mutation_types:
+                mutation_types.append(m["type"])
 
-                sale = {
-                    "time": m["time"],
-                    "ship_id": m["partner"],
-                    "value": m["value"],
-                    "sales": sales,
-                    "costs": costs,
-                    "volume": 0,
-                    "ware": 'ships/repairs'
-                }
-                # print("tegenboeking", self.get_id_attributes(m["partner"])["name"], m["value"])
-                sales_list.append(sale)
-
-        # # debug sort
-        # sales_list.sort(
-        #     key=lambda l: (l["ship_id"], l["time"])
-        # )
-        # for e in sales_list:
-        #     print(self.get_id_attributes(e["ship_id"])["name"], e["value"]])
-
+        print(mutation_types)
         return sales_list
+
+
+    @staticmethod
+    def print_random_load_msg():
+        i = random.randint(0, len(LOAD_MESSAGES)-1)
+        print(' *', LOAD_MESSAGES[i])
+

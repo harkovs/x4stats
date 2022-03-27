@@ -15,7 +15,8 @@ Known issues and limitations:
 -Destroyed ships are no longer available in the save file. This means their trade value will no longer be displayed. In case the ship was a station subordinate, some of the stations profit will be lost eg:  
 Ship buys e-cells for 10 and sells them to its commanding station for 12. If the subordinate ship is destroyed, only the station purchase for value 12 is kept in the save file. Meaning the trader's profit is lost. The same holds true for traders selling for stations.  
   
--Ships are displayed under their current commander taking all the previous trades with them. eg: Miner is mining on sector automine and makes 10k profit. Then it is assigned to as a station miner. The station will now shop 10k profit which it did not earn. 
+-Ships are displayed under their current commander taking all the previous trades with them. eg: Miner is mining on sector automine and makes 10k profit. Then it is assigned to as a station miner. The station will now shop 10k profit which it did not earn.  
+-Currently only one layer of command hierarchy is supported
 
 Installation instructions:  
 Windows  
