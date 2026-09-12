@@ -1,19 +1,53 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="center">
-    <h2>Game stats for {{ hours | safe }} at {{ game_time | safe }} hours of game time</h2>
-    <h2>Profit: {{ profit }} </h2>
-    {{ profit_histogram | safe }}
-    {{ scatter_margin_profit | safe }}
-    <div id="wrapper">
-        <div id="first">{{ w_sales_pie | safe }}</div>
-        <div id="second">{{ w_costs_pie | safe }}</div>
+<div class="page">
+    <div class="page-header">
+        <h1>Game stats</h1>
+        <span class="subtitle">{{ hours | safe }} &middot; {{ game_time | safe }} hours of game time</span>
     </div>
-    <h3>Inactive traders and miners (no trade value in {{ hours | safe }})</h3>
-    {{ inactive_traders | safe }}
-    <h3>Raw ship statistics</h3>
-    {{ table_per_ship | safe }}
 
+    <div class="stat-row">
+        <div class="stat-tile">
+            <div class="stat-label">Profit</div>
+            <div class="stat-value {{ profit_class }}">{{ profit }}</div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Trade value per commander</h2>
+        <div class="card-plot">{{ profit_histogram | safe }}</div>
+    </div>
+
+    <div class="card">
+        <h2>Profit vs. margin per commander</h2>
+        <div class="card-plot">{{ scatter_margin_profit | safe }}</div>
+    </div>
+
+    <div class="card-grid">
+        <div class="card">
+            <h2>Wares sold</h2>
+            <div class="card-plot">{{ w_sales_pie | safe }}</div>
+        </div>
+        <div class="card">
+            <h2>Wares bought</h2>
+            <div class="card-plot">{{ w_costs_pie | safe }}</div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h3>Wares (sorted by profit)</h3>
+        <div class="table-scroll">{{ table_per_ware | safe }}</div>
+    </div>
+
+    <div class="card">
+        <h3>Inactive traders and miners (no trade value in {{ hours | safe }})</h3>
+        <div class="table-scroll">{{ inactive_traders | safe }}</div>
+    </div>
+
+    <div class="card">
+        <h3>Raw ship statistics</h3>
+        <div class="table-scroll">{{ table_per_ship | safe }}</div>
+    </div>
 </div>
 {% endblock %}

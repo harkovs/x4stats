@@ -6,3 +6,5 @@ config.py
 .idea
 x4stats.egg-info/
 stats.egg-info/
+CLAUDE.md
+__pycache__/

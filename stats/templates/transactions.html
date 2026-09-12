@@ -1,9 +1,14 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="center">
-    <h2>Transactions for {{ hours | safe }} hours of game time</h2>
-    {{ transactions_per_ship | safe }}
+<div class="page">
+    <div class="page-header">
+        <h1>Transactions</h1>
+        <span class="subtitle">{{ hours | safe }} hours of game time</span>
+    </div>
 
+    <div class="card">
+        <div class="table-scroll">{{ transactions_per_ship | safe }}</div>
+    </div>
 </div>
 {% endblock %}

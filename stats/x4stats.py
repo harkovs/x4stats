@@ -226,22 +226,32 @@ class X4stats:
 
     def __calc_df_per_commander(self, hours=None):
         df = self.get_df_sales(hours)
-        df_per_com = df.drop(["time", "ware", "hours_since_event"], axis=1) \
+        df_per_com = df[["commander_name", "value", "sales", "costs", "volume"]] \
             .groupby(["commander_name"]
                      , dropna=False).sum().reset_index()
         # print(df_per_com.head())
-
-        df_per_com.columns = ["commander_name", "value", "sales", "costs", "volume"]
         df_per_com = self.__per_x_help(df_per_com)
         # print(df_per_com)
         return df_per_com
+
+    def get_df_per_ware(self, hours=None):
+        return self.__calc_df_per_ware(hours)
+
+    def __calc_df_per_ware(self, hours=None):
+        df = self.get_df_sales(hours, filter_zero_value=True)
+        df = df[df["ware"].notna()]
+        df_per_ware = df[["ware", "value", "sales", "costs", "volume"]] \
+            .groupby(["ware"], dropna=False).sum().reset_index()
+        df_per_ware = self.__per_x_help(df_per_ware)
+        df_per_ware = df_per_ware.sort_values("value", ascending=False)
+        return df_per_ware
 
     # Margekolom en afronding
     @staticmethod
     def __per_x_help(df_perx):
         df_perx["margin"] = (df_perx["sales"] - df_perx["costs"]) / df_perx["sales"]
         df_perx.loc[df_perx.margin < -1, 'margin'] = -1
-        df_perx["margin"].replace([-np.inf, np.nan], 0, inplace=True)
+        df_perx["margin"] = df_perx["margin"].replace([-np.inf, np.nan], 0)
 
         # afronden
         cols = ["value", "sales", "costs", "volume", "margin"]
@@ -273,20 +283,20 @@ class X4stats:
                     }
                     sales_list = self.__append_sales_list(sales_list, sale)
 
-                    if "buyer" in elem and elem["buyer"] in self.own_ship_ids and "price" in elem:
-                        volume = float(elem["v"])
-                        value = -1 * volume * float(elem["price"]) / 100
-                        costs = volume * float(elem["price"]) / 100
-                        sale = {
-                            "time": elem["time"],
-                            "ship_id": elem["buyer"],
-                            "value": value,
-                            "sales": 0,
-                            "costs": costs,
-                            "volume": volume,
-                            "ware": elem["ware"],
-                        }
-                        sales_list = self.__append_sales_list(sales_list, sale)
+                if "buyer" in elem and elem["buyer"] in self.own_ship_ids and "price" in elem:
+                    volume = float(elem["v"])
+                    value = -1 * volume * float(elem["price"]) / 100
+                    costs = volume * float(elem["price"]) / 100
+                    sale = {
+                        "time": elem["time"],
+                        "ship_id": elem["buyer"],
+                        "value": value,
+                        "sales": 0,
+                        "costs": costs,
+                        "volume": volume,
+                        "ware": elem["ware"],
+                    }
+                    sales_list = self.__append_sales_list(sales_list, sale)
 
             except KeyError as e:
                 print(str(type(e)))

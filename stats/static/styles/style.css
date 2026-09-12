@@ -1,24 +1,215 @@
+:root {
+  --page-bg: #0d0d0d;
+  --surface: #1a1a19;
+  --surface-raised: #202020;
+  --text-primary: #ffffff;
+  --text-secondary: #c3c2b7;
+  --text-muted: #898781;
+  --border: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.14);
+  --accent: #3987e5;
+  --good: #0ca30c;
+  --critical: #e66767;
+  --radius: 10px;
+  --font: system-ui, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
 html {
-  font-size: 62.5%; }
+  font-size: 62.5%;
+}
+
 body {
-  background-color: #0a0a0a;
+  background-color: var(--page-bg);
   font-size: 1.5em;
   line-height: 1.6;
   font-weight: 400;
-  font-family: "Open Sans", "HelveticaNeue", "Helvetica Neue", Helvetica, Arial, sans-serif;
-  color: #FFFFFF;
+  font-family: var(--font);
+  color: var(--text-primary);
+  margin: 0;
 }
 
-div {text-align: center;}
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
 
-#wrapper {
-    width: 100%;
-    overflow: hidden;
+a:hover {
+  text-decoration: underline;
 }
-#first {
-    width: 50%;
-    float:left;
+
+/* ---------- Navbar ---------- */
+
+.navbar.navbar-default {
+  background-color: var(--surface);
+  border: none;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  margin-bottom: 0;
+  box-shadow: none;
 }
-#second {
-    overflow: hidden;
+
+.navbar.navbar-default .navbar-nav > li > a,
+.navbar.navbar-default .navbar-nav > li > a.dropdown-toggle {
+  color: var(--text-secondary);
+  font-size: 1.5rem;
+  font-weight: 600;
+  padding: 18px 16px;
+  background: none;
+}
+
+.navbar.navbar-default .navbar-nav > li > a:hover,
+.navbar.navbar-default .navbar-nav > li > a:focus,
+.navbar.navbar-default .navbar-nav > .open > a,
+.navbar.navbar-default .navbar-nav > .open > a:hover,
+.navbar.navbar-default .navbar-nav > .open > a:focus {
+  color: var(--text-primary);
+  background-color: var(--surface-raised);
+}
+
+.navbar.navbar-default .navbar-nav > li:first-child > a {
+  color: var(--text-primary);
+}
+
+.navbar .caret {
+  border-top-color: var(--text-muted);
+}
+
+.navbar-default .dropdown-menu {
+  background-color: var(--surface-raised);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  padding: 6px;
+  margin-top: 6px;
+}
+
+.navbar-default .dropdown-menu > li > a {
+  color: var(--text-secondary);
+  border-radius: 6px;
+  padding: 8px 12px;
+}
+
+.navbar-default .dropdown-menu > li > a:hover,
+.navbar-default .dropdown-menu > li > a:focus {
+  background-color: var(--page-bg);
+  color: var(--text-primary);
+}
+
+/* ---------- Layout ---------- */
+
+.page {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 28px 24px 64px;
+}
+
+.page-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 12px 32px;
+  margin-bottom: 28px;
+}
+
+.page-header h1 {
+  font-size: 2rem;
+  font-weight: 600;
+  margin: 0;
+  color: var(--text-primary);
+}
+
+.page-header .subtitle {
+  color: var(--text-muted);
+  font-size: 1.5rem;
+}
+
+/* Stat tiles */
+
+.stat-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px;
+  margin-bottom: 28px;
+}
+
+.stat-tile {
+  background-color: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px 20px;
+}
+
+.stat-tile .stat-label {
+  color: var(--text-muted);
+  font-size: 1.3rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 6px;
+}
+
+.stat-tile .stat-value {
+  font-size: 2.4rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.stat-tile .stat-value.positive {
+  color: var(--good);
+}
+
+.stat-tile .stat-value.negative {
+  color: var(--critical);
+}
+
+/* Cards */
+
+.card {
+  background-color: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  margin-bottom: 24px;
+  overflow: hidden;
+}
+
+.card h2, .card h3 {
+  margin-top: 0;
+  margin-bottom: 16px;
+  font-size: 1.7rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  text-align: left;
+}
+
+.card .card-plot {
+  margin: -8px;
+}
+
+.card-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+
+@media (max-width: 700px) {
+  .card-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.card-grid .card {
+  margin-bottom: 0;
+}
+
+.table-scroll {
+  overflow-x: auto;
+}
+
+/* Plotly embeds emit their own div/script; keep them full-width */
+.card .plotly-graph-div {
+  width: 100% !important;
 }

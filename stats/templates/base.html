@@ -4,7 +4,6 @@
 {{super()}}
 <link rel="stylesheet"
       href="{{ url_for('static', filename='styles/style.css') }}">
-
 {% endblock %}
 
 {% block title %}X4 stats{% endblock %}
@@ -46,4 +45,17 @@
         </div>
     </div>
 </nav>
+{% endblock %}
+
+{% block scripts %}
+{{super()}}
+<script>
+window.addEventListener('load', function () {
+    document.querySelectorAll('.js-plotly-plot').forEach(function (gd) {
+        if (window.Plotly) {
+            Plotly.Plots.resize(gd);
+        }
+    });
+});
+</script>
 {% endblock %}
