@@ -49,13 +49,7 @@
 
 {% block scripts %}
 {{super()}}
-<script>
-window.addEventListener('load', function () {
-    document.querySelectorAll('.js-plotly-plot').forEach(function (gd) {
-        if (window.Plotly) {
-            Plotly.Plots.resize(gd);
-        }
-    });
-});
-</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="{{ url_for('static', filename='scripts/charts.js') }}"></script>
+<script src="{{ url_for('static', filename='scripts/tables.js') }}"></script>
 {% endblock %}

@@ -1,7 +1,6 @@
 from flask import Flask
 from flask import render_template
 from stats.x4stats import X4stats
-import plotly.graph_objects as go
 from flask_bootstrap import Bootstrap
 from pathlib import Path
 
@@ -11,16 +10,6 @@ app.debug = False
 app.template_folder = 'templates'
 app.static_folder = 'static'
 Bootstrap(app)
-
-colors = {
-    'background': '#1a1a19',
-    'text': '#FFFFFF',
-    'secondary_text': '#c3c2b7',
-    'grid': '#2c2c2a',
-    'header': '#202020',
-}
-colors_bar = ['#3987e5', '#d95926', '#199e70', '#c98500', '#d55181', '#008300', '#9085e9', '#e66767']
-font_family = 'system-ui, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif'
 
 # Check config
 save_location = app.config["SAVE_LOCATION"]
@@ -35,210 +24,73 @@ x4stats = X4stats(
 )
 
 
-def render_fig(fig, first=False):
-    return fig.to_html(
-        full_html=False,
-        include_plotlyjs=True if first else False,
-        default_width='100%',
-        config={'responsive': True, 'displaylogo': False},
-    )
-
-
-def base_layout(**overrides):
-    layout = dict(
-        plot_bgcolor=colors['background'],
-        paper_bgcolor=colors['background'],
-        font=dict(color=colors['text'], family=font_family, size=13),
-        separators='.,',
-        margin=dict(l=50, r=30, t=20, b=50),
-        autosize=True,
-    )
-    layout.update(overrides)
-    return layout
-
-
-def get_ware_sales_pie(df, first=False):
-    ware_sales_pie = go.Figure(
-        data=[go.Pie(
-            labels=df.ware,
-            values=df.sales,
-            marker=dict(colors=colors_bar, line=dict(color=colors['background'], width=2)),
-            hole=0.45,
-        )])
-    ware_sales_pie.update_layout(**base_layout(
-        legend=dict(font=dict(color=colors['secondary_text'])),
-    ))
-    ware_sales_pie.update_traces(textposition='inside', textfont_color=colors['text'])
-    return render_fig(ware_sales_pie, first)
-
-
-def get_ware_costs_pie(df, first=False):
-    ware_costs_pie = go.Figure(
-        data=[go.Pie(
-            labels=df.ware,
-            values=df.costs,
-            marker=dict(colors=colors_bar, line=dict(color=colors['background'], width=2)),
-            hole=0.45,
-        )])
-    ware_costs_pie.update_layout(**base_layout(
-        legend=dict(font=dict(color=colors['secondary_text'])),
-    ))
-    ware_costs_pie.update_traces(textposition='inside', textfont_color=colors['text'])
-    return render_fig(ware_costs_pie, first)
-
-
-def get_profit_per_commander(df, first=False):
-    profit_commander = go.Figure()
-    profit_commander.add_trace(
-        go.Histogram(
-            x=df.commander_name,
-            y=df.value,
-            histfunc="sum",
-            marker={"color": colors_bar[0]},
-        )
-    )
-    profit_commander.update_layout(**base_layout(
-        height=500,
-        margin=dict(l=60, r=30, t=20, b=90),
-        yaxis=dict(
-            title="profit",
-            gridcolor=colors['grid'],
-            zerolinecolor=colors['grid'],
-        ),
-        xaxis=dict(
-            title="commander",
-            rangeslider=dict(visible=True, bgcolor=colors['header'], bordercolor=colors['grid']),
-            type='category',
-            gridcolor=colors['grid'],
-        ),
-    ))
-    return render_fig(profit_commander, first)
-
-
-def get_scatter_margin_profit(df, first=False):
-    fig = go.Figure()
-
-    fig.add_trace(
-        go.Scatter(
-            x=df["value"],
-            y=df["margin"],
-            mode='markers',
-            name='commander',
-            marker=dict(color=colors_bar[0], size=10, opacity=0.85,
-                        line=dict(color=colors['background'], width=1)),
-            text=df["commander_name"]
-        )
-    )
-    fig.update_layout(**base_layout(
-        height=500,
-        xaxis=dict(title="profit", showgrid=False, zerolinecolor=colors['grid']),
-        yaxis=dict(title="margin", showgrid=False, zerolinecolor=colors['grid']),
-    ))
-    return render_fig(fig, first)
-
-
-def zebra_fill(n):
-    return [colors['background'] if i % 2 == 0 else colors['header'] for i in range(n)]
-
-
-def table_header(values):
-    return dict(
-        values=values,
-        fill_color=colors['header'],
-        font=dict(color=colors['text'], family=font_family, size=13),
-        line_color=colors['grid'],
-        align='left',
-        height=34,
-    )
-
-
-def table_cells(values, n_rows):
-    return dict(
-        values=values,
-        fill_color=[zebra_fill(n_rows)] * len(values),
-        font=dict(color=colors['secondary_text'], family=font_family, size=12),
-        line_color=colors['grid'],
-        align='left',
-        height=28,
-    )
-
-
-def get_table_inactive_traders_miners(df, first=False):
-    fig = go.Figure(data=[go.Table(
-        header=table_header(['commander_name', 'default_order', 'ship_code', 'ship_name', 'ship_type'
-                              , 'value', 'volume']),
-        cells=table_cells([
-            df["commander_name"]
-            , df["default_order"]
-            , df["ship_code"]
-            , df["ship_name"]
-            , df["ship_type"]
-            , df["value"].apply(number_formatter)
-            , df["volume"].apply(number_formatter)
-        ], len(df)))
-    ])
-    fig.update_layout(**base_layout(height=max(120, min(330, 60 + 28 * len(df)))))
-    return render_fig(fig, first)
-
-
-def get_table_per_ship(df, first=False):
-    fig = go.Figure(data=[go.Table(
-        header=table_header(list(df.columns)),
-        cells=table_cells([
-            df["ship_id"]
-            , df["ship_class"]
-            , df["commander_name"]
-            , df["default_order"]
-            , df["ship_code"]
-            , df["ship_name"]
-            , df["ship_type"]
-            , df["value"].apply(number_formatter)
-            , df["sales"].apply(number_formatter)
-            , df["costs"].apply(number_formatter)
-            , df["volume"].apply(number_formatter)
-            , df["margin"]
-        ], len(df))),
-    ])
-    fig.update_layout(**base_layout(height=900))
-    return render_fig(fig, first)
-
-
-def get_table_per_ware(df, first=False):
-    fig = go.Figure(data=[go.Table(
-        header=table_header(['ware', 'volume traded', 'total bought', 'total sales', 'profit']),
-        cells=table_cells([
-            df["ware"]
-            , df["volume"].apply(number_formatter)
-            , df["costs"].apply(number_formatter)
-            , df["sales"].apply(number_formatter)
-            , df["value"].apply(number_formatter)
-        ], len(df))),
-    ])
-    fig.update_layout(**base_layout(height=max(120, min(700, 60 + 28 * len(df)))))
-    return render_fig(fig, first)
-
-
-def get_transactions_per_ship(df, first=False):
-    cols = ["name", "code", "commander", "time", "hours_since_event", "ware", "value", "volume"]
-    fig = go.Figure(data=[go.Table(
-        header=table_header(cols),
-        cells=table_cells([
-            df["ship_name"]
-            , df["ship_code"]
-            , df["commander_name"]
-            , df["time"]
-            , df["hours_since_event"]
-            , df["ware"]
-            , df["value"].apply(number_formatter)
-            , df["volume"].apply(number_formatter)
-        ], len(df)))
-    ])
-    fig.update_layout(**base_layout(height=900))
-    return render_fig(fig, first)
-
-
 def number_formatter(n):
     return f'{int(n):,}'.replace(',', '.')
+
+
+app.jinja_env.filters['money'] = number_formatter
+
+
+def get_commander_chart_data(df):
+    df = df.sort_values('value', ascending=False)
+    return {
+        'labels': [str(v) for v in df['commander_name']],
+        'values': [float(v) for v in df['value']],
+    }
+
+
+def get_scatter_data(df):
+    return [
+        {'x': float(row['value']), 'y': float(row['margin']), 'label': str(row['commander_name'])}
+        for _, row in df.iterrows()
+    ]
+
+
+def get_ware_pie_data(df, column):
+    df = df[df[column] > 0].sort_values(column, ascending=False)
+    return {
+        'labels': [str(v) for v in df['ware']],
+        'values': [float(v) for v in df[column]],
+    }
+
+
+def table_columns_ship(df):
+    return [{'key': c, 'label': c, 'type': (
+        'money' if c == 'value' else
+        'number' if c in ('sales', 'costs', 'volume') else
+        'percent' if c == 'margin' else
+        'text'
+    )} for c in df.columns]
+
+
+TABLE_COLUMNS_INACTIVE = [
+    {'key': 'commander_name', 'label': 'commander_name', 'type': 'text'},
+    {'key': 'default_order', 'label': 'default_order', 'type': 'text'},
+    {'key': 'ship_code', 'label': 'ship_code', 'type': 'text'},
+    {'key': 'ship_name', 'label': 'ship_name', 'type': 'text'},
+    {'key': 'ship_type', 'label': 'ship_type', 'type': 'text'},
+    {'key': 'value', 'label': 'value', 'type': 'money'},
+    {'key': 'volume', 'label': 'volume', 'type': 'number'},
+]
+
+TABLE_COLUMNS_WARE = [
+    {'key': 'ware', 'label': 'ware', 'type': 'text'},
+    {'key': 'volume', 'label': 'volume traded', 'type': 'number'},
+    {'key': 'costs', 'label': 'total bought', 'type': 'number'},
+    {'key': 'sales', 'label': 'total sales', 'type': 'number'},
+    {'key': 'value', 'label': 'profit', 'type': 'money'},
+]
+
+TABLE_COLUMNS_TRANSACTIONS = [
+    {'key': 'ship_name', 'label': 'name', 'type': 'text'},
+    {'key': 'ship_code', 'label': 'code', 'type': 'text'},
+    {'key': 'commander_name', 'label': 'commander', 'type': 'text'},
+    {'key': 'time', 'label': 'time', 'type': 'number'},
+    {'key': 'hours_since_event', 'label': 'hours ago', 'type': 'number'},
+    {'key': 'ware', 'label': 'ware', 'type': 'text'},
+    {'key': 'value', 'label': 'value', 'type': 'money'},
+    {'key': 'volume', 'label': 'volume', 'type': 'number'},
+]
 
 
 @app.route('/', methods=['GET'])
@@ -259,33 +111,30 @@ def stats(hours=None):
     profit_value = int(x4stats.get_profit(df_sales))
     profit = f'{profit_value:,}'.replace(',', '.')
     profit_class = 'positive' if profit_value > 0 else 'negative' if profit_value < 0 else ''
-    profit_histogram = get_profit_per_commander(df_sales, first=True)
-    scatter_margin_profit = get_scatter_margin_profit(df_per_commander)
-    w_sales_pie = get_ware_sales_pie(df_sales)
-    w_costs_pie = get_ware_costs_pie(df_sales)
-    inactive_traders = get_table_inactive_traders_miners(df_inactive_traders)
-    table_per_ship = get_table_per_ship(df_per_ship)
-    table_per_ware = get_table_per_ware(df_per_ware)
 
     hours_par = "all time"
     hours_raw = ''
     if hours:
         hours_par = "past " + str(hours) + " hours"
         hours_raw = hours
+
     return render_template(
         'index.html',
-        profit_histogram=profit_histogram,
-        w_sales_pie=w_sales_pie,
-        w_costs_pie=w_costs_pie,
-        scatter_margin_profit=scatter_margin_profit,
+        commander_chart=get_commander_chart_data(df_per_commander),
+        scatter_data=get_scatter_data(df_per_commander),
+        sales_pie=get_ware_pie_data(df_per_ware, 'sales'),
+        costs_pie=get_ware_pie_data(df_per_ware, 'costs'),
         game_time=game_time,
         profit=profit,
         profit_class=profit_class,
         hours=hours_par,
         hours_raw=hours_raw,
-        inactive_traders=inactive_traders,
-        table_per_ship=table_per_ship,
-        table_per_ware=table_per_ware,
+        inactive_columns=TABLE_COLUMNS_INACTIVE,
+        inactive_rows=df_inactive_traders.to_dict('records'),
+        ship_columns=table_columns_ship(df_per_ship),
+        ship_rows=df_per_ship.to_dict('records'),
+        ware_columns=TABLE_COLUMNS_WARE,
+        ware_rows=df_per_ware.to_dict('records'),
     )
 
 
@@ -293,7 +142,6 @@ def stats(hours=None):
 @app.route('/transactions/<hours>', methods=['GET'])
 def transactions(hours=None):
     df_sales = x4stats.get_df_sales_sorted(hours, filter_zero_value=True)
-    transactions_per_ship = get_transactions_per_ship(df_sales, first=True)
     hours_par = "all time"
     hours_raw = ''
     if hours:
@@ -301,7 +149,8 @@ def transactions(hours=None):
         hours_raw = hours
     return render_template(
         'transactions.html',
-        transactions_per_ship=transactions_per_ship,
+        transaction_columns=TABLE_COLUMNS_TRANSACTIONS,
+        transaction_rows=df_sales.to_dict('records'),
         hours=hours_par,
         hours_raw=hours_raw,
     )

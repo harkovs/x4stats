@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% import "_macros.html" as macros %}
 
 {% block content %}
 <div class="page">
@@ -16,38 +17,60 @@
 
     <div class="card">
         <h2>Trade value per commander</h2>
-        <div class="card-plot">{{ profit_histogram | safe }}</div>
+        <div class="chart-container chart-tall">
+            <canvas id="commander-chart"></canvas>
+        </div>
     </div>
 
     <div class="card">
         <h2>Profit vs. margin per commander</h2>
-        <div class="card-plot">{{ scatter_margin_profit | safe }}</div>
+        <div class="chart-container chart-tall">
+            <canvas id="scatter-chart"></canvas>
+        </div>
     </div>
 
     <div class="card-grid">
         <div class="card">
             <h2>Wares sold</h2>
-            <div class="card-plot">{{ w_sales_pie | safe }}</div>
+            <div class="chart-container">
+                <canvas id="sales-pie"></canvas>
+            </div>
         </div>
         <div class="card">
             <h2>Wares bought</h2>
-            <div class="card-plot">{{ w_costs_pie | safe }}</div>
+            <div class="chart-container">
+                <canvas id="costs-pie"></canvas>
+            </div>
         </div>
     </div>
 
     <div class="card">
         <h3>Wares (sorted by profit)</h3>
-        <div class="table-scroll">{{ table_per_ware | safe }}</div>
+        <div class="table-scroll">{{ macros.data_table(ware_columns, ware_rows) }}</div>
     </div>
 
     <div class="card">
         <h3>Inactive traders and miners (no trade value in {{ hours | safe }})</h3>
-        <div class="table-scroll">{{ inactive_traders | safe }}</div>
+        <div class="table-scroll">{{ macros.data_table(inactive_columns, inactive_rows) }}</div>
     </div>
 
     <div class="card">
         <h3>Raw ship statistics</h3>
-        <div class="table-scroll">{{ table_per_ship | safe }}</div>
+        <div class="table-scroll">{{ macros.data_table(ship_columns, ship_rows) }}</div>
     </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var commanderChart = {{ commander_chart | tojson }};
+    var scatterData = {{ scatter_data | tojson }};
+    var salesPie = {{ sales_pie | tojson }};
+    var costsPie = {{ costs_pie | tojson }};
+
+    X4Charts.bar('commander-chart', commanderChart.labels, commanderChart.values);
+    X4Charts.scatter('scatter-chart', scatterData);
+    X4Charts.pie('sales-pie', salesPie.labels, salesPie.values);
+    X4Charts.pie('costs-pie', costsPie.labels, costsPie.values);
+});
+</script>
 {% endblock %}

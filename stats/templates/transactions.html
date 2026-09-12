@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% import "_macros.html" as macros %}
 
 {% block content %}
 <div class="page">
@@ -8,7 +9,7 @@
     </div>
 
     <div class="card">
-        <div class="table-scroll">{{ transactions_per_ship | safe }}</div>
+        <div class="table-scroll">{{ macros.data_table(transaction_columns, transaction_rows) }}</div>
     </div>
 </div>
 {% endblock %}

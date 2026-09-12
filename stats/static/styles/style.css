@@ -185,8 +185,13 @@ a:hover {
   text-align: left;
 }
 
-.card .card-plot {
-  margin: -8px;
+.chart-container {
+  position: relative;
+  height: 320px;
+}
+
+.chart-container.chart-tall {
+  height: 420px;
 }
 
 .card-grid {
@@ -209,7 +214,70 @@ a:hover {
   overflow-x: auto;
 }
 
-/* Plotly embeds emit their own div/script; keep them full-width */
-.card .plotly-graph-div {
-  width: 100% !important;
+/* Data tables */
+
+table.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 1.3rem;
+}
+
+table.data-table th,
+table.data-table td {
+  padding: 8px 14px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+table.data-table thead th {
+  background-color: var(--surface-raised);
+  color: var(--text-primary);
+  font-weight: 600;
+  position: sticky;
+  top: 0;
+  user-select: none;
+}
+
+table.data-table thead th.sortable {
+  cursor: pointer;
+}
+
+table.data-table thead th.sortable:hover {
+  color: var(--accent);
+}
+
+table.data-table thead th.sort-asc::after {
+  content: ' \25B2';
+  color: var(--accent);
+}
+
+table.data-table thead th.sort-desc::after {
+  content: ' \25BC';
+  color: var(--accent);
+}
+
+table.data-table tbody tr:nth-child(even) {
+  background-color: var(--surface-raised);
+}
+
+table.data-table tbody tr:hover {
+  background-color: var(--border-strong);
+}
+
+table.data-table td {
+  color: var(--text-secondary);
+}
+
+table.data-table td.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+table.data-table td.positive {
+  color: var(--good);
+}
+
+table.data-table td.negative {
+  color: var(--critical);
 }

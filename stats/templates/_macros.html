@@ -1,0 +1,27 @@
+{% macro data_table(columns, rows) %}
+<table class="data-table">
+    <thead>
+        <tr>
+        {% for col in columns %}
+            <th>{{ col.label }}</th>
+        {% endfor %}
+        </tr>
+    </thead>
+    <tbody>
+    {% for row in rows %}
+        <tr>
+        {% for col in columns %}
+            {% set raw = row[col.key] %}
+            {% if col.type == 'money' or col.type == 'number' %}
+                <td class="num {{ 'positive' if col.type == 'money' and raw > 0 else 'negative' if col.type == 'money' and raw < 0 else '' }}" data-sort-value="{{ raw }}">{{ raw | money }}</td>
+            {% elif col.type == 'percent' %}
+                <td class="num {{ 'positive' if raw > 0 else 'negative' if raw < 0 else '' }}" data-sort-value="{{ raw }}">{{ (raw * 100) | round(1) }}%</td>
+            {% else %}
+                <td>{{ raw if raw is not none else '' }}</td>
+            {% endif %}
+        {% endfor %}
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% endmacro %}
