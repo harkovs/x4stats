@@ -8,10 +8,53 @@
         <span class="subtitle">{{ hours | safe }} &middot; {{ game_time | safe }} hours of game time</span>
     </div>
 
+    {{ macros.hour_filter('stats', hours_raw) }}
+
     <div class="stat-row">
         <div class="stat-tile">
             <div class="stat-label">Profit</div>
             <div class="stat-value {{ profit_class }}">{{ profit }}</div>
+        </div>
+        <div class="stat-tile">
+            <div class="stat-label">Total sales</div>
+            <div class="stat-value">{{ total_sales | money }}</div>
+        </div>
+        <div class="stat-tile">
+            <div class="stat-label">Total bought</div>
+            <div class="stat-value">{{ total_costs | money }}</div>
+        </div>
+        <div class="stat-tile">
+            <div class="stat-label">Margin</div>
+            <div class="stat-value {{ margin_class }}">{{ (margin_value * 100) | round(1) }}%</div>
+        </div>
+        <div class="stat-tile">
+            <div class="stat-label">Active traders</div>
+            <div class="stat-value">{{ active_count }}/{{ eligible_count }}</div>
+        </div>
+    </div>
+
+    <div class="ware-toggle-row" id="ware-toggle-row">
+        <span class="ware-toggle-label">Wares:</span>
+    </div>
+
+    <div class="card">
+        <h2>Profit over time</h2>
+        <div class="chart-container">
+            <canvas id="profit-time-chart"></canvas>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Margin over time</h2>
+        <div class="chart-container">
+            <canvas id="margin-time-chart"></canvas>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Volume traded over time</h2>
+        <div class="chart-container">
+            <canvas id="volume-time-chart"></canvas>
         </div>
     </div>
 
@@ -46,17 +89,17 @@
 
     <div class="card">
         <h3>Wares (sorted by profit)</h3>
-        <div class="table-scroll">{{ macros.data_table(ware_columns, ware_rows) }}</div>
+        <div class="table-scroll">{{ macros.data_table(ware_columns, ware_rows, 'ware-table') }}</div>
     </div>
 
     <div class="card">
         <h3>Inactive traders and miners (no trade value in {{ hours | safe }})</h3>
-        <div class="table-scroll">{{ macros.data_table(inactive_columns, inactive_rows) }}</div>
+        <div class="table-scroll">{{ macros.data_table(inactive_columns, inactive_rows, 'inactive-table') }}</div>
     </div>
 
     <div class="card">
         <h3>Raw ship statistics</h3>
-        <div class="table-scroll">{{ macros.data_table(ship_columns, ship_rows) }}</div>
+        <div class="table-scroll">{{ macros.data_table(ship_columns, ship_rows, 'ship-table') }}</div>
     </div>
 </div>
 
@@ -66,11 +109,36 @@ document.addEventListener('DOMContentLoaded', function () {
     var scatterData = {{ scatter_data | tojson }};
     var salesPie = {{ sales_pie | tojson }};
     var costsPie = {{ costs_pie | tojson }};
+    var timeSeries = {{ time_series | tojson }};
 
     X4Charts.bar('commander-chart', commanderChart.labels, commanderChart.values);
     X4Charts.scatter('scatter-chart', scatterData);
     X4Charts.pie('sales-pie', salesPie.labels, salesPie.values);
     X4Charts.pie('costs-pie', costsPie.labels, costsPie.values);
+
+    var wareCharts = [
+        X4Charts.multiLine('profit-time-chart', timeSeries.labels, timeSeries.wares, timeSeries.series, 'profit'),
+        X4Charts.multiLine('margin-time-chart', timeSeries.labels, timeSeries.wares, timeSeries.series, 'margin', {percent: true}),
+        X4Charts.multiLine('volume-time-chart', timeSeries.labels, timeSeries.wares, timeSeries.series, 'volume'),
+    ];
+
+    var toggleRow = document.getElementById('ware-toggle-row');
+    timeSeries.wares.forEach(function (ware, idx) {
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'ware-pill active';
+        btn.style.setProperty('--ware-color', X4Charts.wareColor(idx));
+        btn.textContent = ware;
+        btn.addEventListener('click', function () {
+            var active = btn.classList.toggle('active');
+            wareCharts.forEach(function (chart) {
+                if (!chart) return;
+                chart.setDatasetVisibility(idx, active);
+                chart.update();
+            });
+        });
+        toggleRow.appendChild(btn);
+    });
 });
 </script>
 {% endblock %}

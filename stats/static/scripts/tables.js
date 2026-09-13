@@ -42,4 +42,15 @@
       });
     });
   });
+
+  document.querySelectorAll('.table-search').forEach(function (input) {
+    var table = document.getElementById(input.dataset.tableTarget);
+    if (!table) return;
+    input.addEventListener('input', function () {
+      var q = input.value.trim().toLowerCase();
+      Array.prototype.forEach.call(table.tBodies[0].rows, function (row) {
+        row.hidden = !!q && row.textContent.toLowerCase().indexOf(q) === -1;
+      });
+    });
+  });
 })();

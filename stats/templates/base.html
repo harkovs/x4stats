@@ -1,55 +1,40 @@
-{% extends "bootstrap/base.html" %}
-
-{% block styles %}
-{{super()}}
-<link rel="stylesheet"
-      href="{{ url_for('static', filename='styles/style.css') }}">
-{% endblock %}
-
-{% block title %}X4 stats{% endblock %}
-
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}X4 stats{% endblock %}</title>
+    {% block styles %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles/style.css') }}">
+    {% endblock %}
+</head>
+<body>
 {% block navbar %}
-<nav class="navbar navbar-default">
-
-    <div class="container">
-        <div class="navbar-header">
-            <ul class="nav navbar-nav">
-                <li><a href="{{ url_for('stats') }}">X4Stats</a></li>
-                <li class="dropdown">
-                    <a class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="true"> <span class="nav-label">Dashboard</span> <span class="caret"></span></a>
-                    <ul class="dropdown-menu">
-                         <li><a href="{{ url_for('stats') }}/1">1 hour</a></li>
-                        <li><a href="{{ url_for('stats') }}/2">2 hours</a></li>
-                        <li><a href="{{ url_for('stats') }}/3">3 hours</a></li>
-                        <li><a href="{{ url_for('stats') }}/5">5 hours</a></li>
-                        <li><a href="{{ url_for('stats') }}/10">10 hours</a></li>
-                        <li><a href="{{ url_for('stats') }}/25">25 hours</a></li>
-                        <li><a href="{{ url_for('stats') }}">All (since 4.0)</a></li>
-                    </ul>
-                </li>
-
-                <li class="dropdown">
-                    <a class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="true"> <span class="nav-label">Transactions</span> <span class="caret"></span></a>
-                    <ul class="dropdown-menu">
-                         <li><a href="{{ url_for('transactions') }}/1">1 hour</a></li>
-                        <li><a href="{{ url_for('transactions') }}/2">2 hours</a></li>
-                        <li><a href="{{ url_for('transactions') }}/3">3 hours</a></li>
-                        <li><a href="{{ url_for('transactions') }}/5">5 hours</a></li>
-                        <li><a href="{{ url_for('transactions') }}/10">10 hours</a></li>
-                        <li><a href="{{ url_for('transactions') }}/25">25 hours</a></li>
-                        <li><a href="{{ url_for('transactions') }}">All (since 4.0)</a></li>
-                    </ul>
-                </li>
-                <li><a href="{{ url_for('reload') }}/{{ hours_raw | safe }}">Update save</a></li>
-            </ul>
+<nav class="topbar">
+    <div class="topbar-inner">
+        <a class="brand" href="{{ url_for('stats') }}">X4Stats</a>
+        <div class="nav-links">
+            <a href="{{ url_for('stats') }}" class="{{ 'active' if request.endpoint == 'stats' else '' }}">
+                <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>
+                Dashboard
+            </a>
+            <a href="{{ url_for('transactions') }}" class="{{ 'active' if request.endpoint == 'transactions' else '' }}">
+                <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 7h11M7 7l3.5-3.5M7 7l3.5 3.5M17 17H6M17 17l-3.5-3.5M17 17l-3.5 3.5"/></svg>
+                Transactions
+            </a>
         </div>
+        <a class="update-btn" href="{{ url_for('reload') }}/{{ hours_raw | safe }}">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4v6h6"/><path d="M20 20v-6h-6"/><path d="M4.5 15a8 8 0 0 0 13.9 3.5L20 14"/><path d="M19.5 9A8 8 0 0 0 5.6 5.5L4 10"/></svg>
+            Update save
+        </a>
     </div>
 </nav>
 {% endblock %}
-
+{% block content %}{% endblock %}
 {% block scripts %}
-{{super()}}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="{{ url_for('static', filename='scripts/charts.js') }}"></script>
 <script src="{{ url_for('static', filename='scripts/tables.js') }}"></script>
 {% endblock %}
+</body>
+</html>

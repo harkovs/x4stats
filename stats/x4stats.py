@@ -112,6 +112,7 @@ class X4stats:
                     # check for subordinates and commander connections
                     elif (cur_player_entity
                           and elem.tag == 'connection'
+                          and 'connection' in elem.attrib
                           and elem.attrib['connection'] in connection_types):
                         cur_connection_type = elem.attrib['connection']
                         cur_connection_id = elem.attrib['id']
@@ -141,6 +142,7 @@ class X4stats:
                     # Remove connection type subordinates
                     elif (cur_player_entity
                           and elem.tag == 'connection'
+                          and 'connection' in elem.attrib
                           and elem.attrib['connection'] in connection_types):
                         cur_connection_type = None
                         cur_connection_id = None
@@ -221,6 +223,16 @@ class X4stats:
 
     # df['ship_class'].isin(SHIP_CLASSES), df['value'] == 0
 
+    # (active, total) count of ships with a trade/mining order
+    def get_active_traders_count(self, hours=None):
+        df = self.__calc_df_per_ship(hours)
+        eligible = df.loc[
+            (df['default_order'].isin(ECO_ORDERS))
+            & (df['ship_class'].isin(SHIP_CLASSES))
+        ]
+        active = eligible.loc[eligible['value'] != 0]
+        return len(active), len(eligible)
+
     def get_df_per_commander(self, hours=None):
         return self.__calc_df_per_commander(hours)
 
@@ -245,6 +257,18 @@ class X4stats:
         df_per_ware = self.__per_x_help(df_per_ware)
         df_per_ware = df_per_ware.sort_values("value", ascending=False)
         return df_per_ware
+
+    def get_df_per_hour_ware(self, hours=None):
+        return self.__calc_df_per_hour_ware(hours)
+
+    def __calc_df_per_hour_ware(self, hours=None):
+        df = self.get_df_sales(hours, filter_zero_value=True)
+        df = df[df["ware"].notna()]
+        df_per_hour_ware = df[["hours_since_event", "ware", "value", "sales", "costs", "volume"]] \
+            .groupby(["hours_since_event", "ware"], dropna=False).sum().reset_index()
+        df_per_hour_ware = self.__per_x_help(df_per_hour_ware)
+        df_per_hour_ware = df_per_hour_ware.sort_values("hours_since_event", ascending=False)
+        return df_per_hour_ware
 
     # Margekolom en afronding
     @staticmethod

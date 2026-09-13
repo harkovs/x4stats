@@ -8,8 +8,10 @@
         <span class="subtitle">{{ hours | safe }} hours of game time</span>
     </div>
 
+    {{ macros.hour_filter('transactions', hours_raw) }}
+
     <div class="card">
-        <div class="table-scroll">{{ macros.data_table(transaction_columns, transaction_rows) }}</div>
+        <div class="table-scroll">{{ macros.data_table(transaction_columns, transaction_rows, 'transactions-table') }}</div>
     </div>
 </div>
 {% endblock %}

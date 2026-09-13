@@ -1,9 +1,21 @@
-{% macro data_table(columns, rows) %}
-<table class="data-table">
+{% macro hour_filter(endpoint, current) %}
+<div class="pill-group">
+    <a class="pill {{ 'active' if current == '' else '' }}" href="{{ url_for(endpoint) }}">All</a>
+    {% for h in [1, 2, 3, 5, 10, 25] %}
+    <a class="pill {{ 'active' if current == h|string else '' }}" href="{{ url_for(endpoint, hours=h) }}">{{ h }}h</a>
+    {% endfor %}
+</div>
+{% endmacro %}
+
+{% macro data_table(columns, rows, table_id) %}
+<div class="table-toolbar">
+    <input type="search" class="table-search" data-table-target="{{ table_id }}" placeholder="Filter&hellip;">
+</div>
+<table class="data-table" id="{{ table_id }}">
     <thead>
         <tr>
         {% for col in columns %}
-            <th>{{ col.label }}</th>
+            <th class="{{ 'num' if col.type in ('money', 'number', 'percent') else '' }}">{{ col.label }}</th>
         {% endfor %}
         </tr>
     </thead>
