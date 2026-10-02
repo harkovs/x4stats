@@ -1,4 +1,6 @@
 import math
+import socket
+import sys
 from flask import Flask
 from flask import render_template
 from stats.x4stats import X4stats
@@ -17,10 +19,11 @@ if not p.exists():
     print("SAVE_LOCATION does not exist. Check config.py file.")
     quit()
 
-# save ophalen
-x4stats = X4stats(
-    save_location=save_location
-)
+HOST = '127.0.0.1'
+PORT = 2992
+
+# Loaded in main(), after the port check, so a second instance doesn't parse the whole save first
+x4stats = None
 
 
 def number_formatter(n):
@@ -224,8 +227,26 @@ def reload(hours=None):
     return stats(hours)
 
 
+def port_in_use(host, port):
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        try:
+            s.bind((host, port))
+        except OSError:
+            return True
+    return False
+
+
 def main():
-    app.run(host='127.0.0.1', port=2992, threaded=True, debug=False)
+    global x4stats
+    if port_in_use(HOST, PORT):
+        print(f"Port {PORT} is already in use. Is X4stats already running? http://localhost:{PORT}/stats")
+        sys.exit(1)
+
+    # save ophalen
+    x4stats = X4stats(
+        save_location=save_location
+    )
+    app.run(host=HOST, port=PORT, threaded=True, debug=False)
 
 
 if __name__ == '__main__':
