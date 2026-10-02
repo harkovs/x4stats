@@ -1,3 +1,17 @@
+{% macro icon(name) -%}
+<svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+{%- if name == 'dashboard' -%}<rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/>
+{%- elif name == 'transactions' -%}<path d="M7 7h11M7 7l3.5-3.5M7 7l3.5 3.5M17 17H6M17 17l-3.5-3.5M17 17l-3.5 3.5"/>
+{%- elif name == 'trend' -%}<path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 6-7"/>
+{%- elif name == 'commanders' -%}<circle cx="12" cy="6" r="2.5"/><circle cx="5.5" cy="17.5" r="2.5"/><circle cx="18.5" cy="17.5" r="2.5"/><path d="M12 8.5V12M12 12l-5 3.5M12 12l5 3.5"/>
+{%- elif name == 'wares' -%}<path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/>
+{%- elif name == 'idle' -%}<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>
+{%- elif name == 'ships' -%}<path d="M4 6h16M4 12h16M4 18h10"/>
+{%- elif name == 'reload' -%}<path d="M4 4v6h6"/><path d="M20 20v-6h-6"/><path d="M4.5 15a8 8 0 0 0 13.9 3.5L20 14"/><path d="M19.5 9A8 8 0 0 0 5.6 5.5L4 10"/>
+{%- elif name == 'collapse' -%}<circle cx="12" cy="12" r="9"/><path d="M13.5 8.5L10 12l3.5 3.5"/>
+{%- endif -%}
+</svg>
+{%- endmacro %}
 <!doctype html>
 <html lang="en">
 <head>
@@ -5,33 +19,69 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% block title %}X4 stats{% endblock %}</title>
     {% block styles %}
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&display=swap">
     <link rel="stylesheet" href="{{ url_for('static', filename='styles/style.css') }}">
     {% endblock %}
+    <script>
+        // Restore the collapsed sidebar before first paint to avoid a flash
+        try { if (localStorage.getItem('x4-sidebar') === 'collapsed') document.documentElement.classList.add('sidebar-collapsed'); } catch (e) {}
+    </script>
 </head>
 <body>
+<div class="shell">
 {% block navbar %}
-<nav class="topbar">
-    <div class="topbar-inner">
-        <a class="brand" href="{{ url_for('stats') }}">X4Stats</a>
-        <div class="nav-links">
-            <a href="{{ url_for('stats') }}" class="{{ 'active' if request.endpoint == 'stats' else '' }}">
-                <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>
-                Dashboard
-            </a>
-            <a href="{{ url_for('transactions') }}" class="{{ 'active' if request.endpoint == 'transactions' else '' }}">
-                <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 7h11M7 7l3.5-3.5M7 7l3.5 3.5M17 17H6M17 17l-3.5-3.5M17 17l-3.5 3.5"/></svg>
-                Transactions
-            </a>
-        </div>
-        <a class="update-btn" href="{{ url_for('reload') }}/{{ hours_raw | safe }}">
-            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4v6h6"/><path d="M20 20v-6h-6"/><path d="M4.5 15a8 8 0 0 0 13.9 3.5L20 14"/><path d="M19.5 9A8 8 0 0 0 5.6 5.5L4 10"/></svg>
-            Update save
+{% set on_stats = request.endpoint in ('stats', 'reload') %}
+{% set stats_url = url_for('stats', hours=hours_raw) if hours_raw else url_for('stats') %}
+<aside class="sidebar">
+    <a class="sidebar-brand" href="{{ url_for('stats') }}">
+        <span class="brand-mark" aria-hidden="true">X4</span>
+        <span class="brand-text">
+            <span class="brand-name">X4Stats</span>
+            <span class="brand-sub">{{ player_name or 'Player' }} &middot; {{ game_hours }}h</span>
+        </span>
+    </a>
+
+    <nav class="nav-group">
+        <a href="{{ stats_url }}" class="nav-item {{ 'active' if on_stats else '' }}" title="Dashboard">
+            {{ icon('dashboard') }}<span class="nav-label">Dashboard</span>
         </a>
-    </div>
-</nav>
+        <a href="{{ url_for('transactions', hours=hours_raw) if hours_raw else url_for('transactions') }}" class="nav-item {{ 'active' if request.endpoint == 'transactions' else '' }}" title="Transactions">
+            {{ icon('transactions') }}<span class="nav-label">Transactions</span>
+        </a>
+    </nav>
+
+    <nav class="nav-group">
+        <div class="nav-heading">Dashboard</div>
+        <a href="{{ stats_url }}#trends" class="nav-item" title="Trends">{{ icon('trend') }}<span class="nav-label">Trends</span></a>
+        <a href="{{ stats_url }}#commanders" class="nav-item" title="Commanders">{{ icon('commanders') }}<span class="nav-label">Commanders</span></a>
+        <a href="{{ stats_url }}#wares" class="nav-item" title="Wares">{{ icon('wares') }}<span class="nav-label">Wares</span></a>
+        <a href="{{ stats_url }}#idle" class="nav-item" title="Idle ships">{{ icon('idle') }}<span class="nav-label">Idle ships</span></a>
+        <a href="{{ stats_url }}#ships" class="nav-item" title="All ships">{{ icon('ships') }}<span class="nav-label">All ships</span></a>
+    </nav>
+
+    <nav class="nav-group nav-bottom">
+        <a href="{{ url_for('reload') }}/{{ hours_raw | safe }}" class="nav-item nav-cta" title="Update save">
+            {{ icon('reload') }}<span class="nav-label">Update save</span>
+        </a>
+        <button type="button" class="nav-item" id="sidebar-toggle" title="Collapse">
+            {{ icon('collapse') }}<span class="nav-label">Collapse</span>
+        </button>
+    </nav>
+</aside>
 {% endblock %}
+<main class="main">
 {% block content %}{% endblock %}
+</main>
+</div>
 {% block scripts %}
+<script>
+    document.getElementById('sidebar-toggle').addEventListener('click', function () {
+        var collapsed = document.documentElement.classList.toggle('sidebar-collapsed');
+        try { localStorage.setItem('x4-sidebar', collapsed ? 'collapsed' : 'open'); } catch (e) {}
+    });
+</script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="{{ url_for('static', filename='scripts/charts.js') }}"></script>
 <script src="{{ url_for('static', filename='scripts/tables.js') }}"></script>

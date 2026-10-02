@@ -30,6 +30,15 @@ def number_formatter(n):
 app.jinja_env.filters['money'] = number_formatter
 
 
+# Shared values for the sidebar on every page
+@app.context_processor
+def inject_shell():
+    return {
+        'player_name': x4stats.get_player_name(),
+        'game_hours': round(x4stats.get_game_time() / 3600, 1),
+    }
+
+
 def get_commander_chart_data(df):
     df = df.sort_values('value', ascending=False)
     return {

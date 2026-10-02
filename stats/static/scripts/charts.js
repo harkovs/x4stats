@@ -1,10 +1,10 @@
 (function () {
-  var COLORS = ['#3987e5', '#d95926', '#199e70', '#c98500', '#d55181', '#008300', '#9085e9', '#e66767'];
-  var GRID = '#2c2c2a';
-  var TEXT = '#c3c2b7';
-  var MUTED = '#898781';
-  var SURFACE = '#1a1a19';
-  var FONT = 'system-ui, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif';
+  var COLORS = ['#24d36b', '#4f9cf0', '#f0803c', '#e5b93a', '#d76fd0', '#2ec4c4', '#9a8cf0', '#f2626f'];
+  var GRID = '#282828';
+  var TEXT = '#b3b3b3';
+  var MUTED = '#7c7c7c';
+  var SURFACE = '#181818';
+  var FONT = '"Figtree", system-ui, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif';
 
   Chart.defaults.font.family = FONT;
   Chart.defaults.color = TEXT;

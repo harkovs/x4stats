@@ -197,6 +197,10 @@ class X4stats:
     def get_game_time(self):
         return self.game_time
 
+    def get_player_name(self):
+        player = self.get_id_attributes(self.player_id) if self.player_id else None
+        return player["name"] if player else None
+
     def get_df_sales(self, hours=None, filter_zero_value=False):
         df = self.sales.copy()
         if hours:

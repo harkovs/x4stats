@@ -33,6 +33,7 @@
         </div>
     </div>
 
+    <h2 class="section-title" id="trends">Trends</h2>
     <div class="ware-toggle-row" id="ware-toggle-row">
         <span class="ware-toggle-label">Wares:</span>
     </div>
@@ -58,6 +59,7 @@
         </div>
     </div>
 
+    <h2 class="section-title" id="commanders">Commanders</h2>
     <div class="card">
         <h2>Trade value per commander</h2>
         <div class="chart-container chart-tall">
@@ -72,6 +74,7 @@
         </div>
     </div>
 
+    <h2 class="section-title" id="wares">Wares</h2>
     <div class="card-grid">
         <div class="card">
             <h2>Wares sold</h2>
@@ -92,11 +95,13 @@
         <div class="table-scroll">{{ macros.data_table(ware_columns, ware_rows, 'ware-table') }}</div>
     </div>
 
+    <h2 class="section-title" id="idle">Idle ships</h2>
     <div class="card">
         <h3>Inactive traders and miners (no trade value in {{ hours | safe }})</h3>
         <div class="table-scroll">{{ macros.data_table(inactive_columns, inactive_rows, 'inactive-table') }}</div>
     </div>
 
+    <h2 class="section-title" id="ships">All ships</h2>
     <div class="card">
         <h3>Raw ship statistics</h3>
         <div class="table-scroll">{{ macros.data_table(ship_columns, ship_rows, 'ship-table') }}</div>
