@@ -5,8 +5,8 @@ ECO_ORDERS = [
     , 'MiningRoutine_Advanced'
     , 'MiddleMan'
     , 'TradeRoutine'
-    , 'TradeRouttine_Basic'
-    , 'TradeRouttine_Advanced'
+    , 'TradeRoutine_Basic'
+    , 'TradeRoutine_Advanced'
     , 'FindBuildTasks'
     ]
 SHIP_CLASSES = [
@@ -20,6 +20,8 @@ SHIP_CLASSES = [
 
 STATION_CLASSES = ['station']
 PLAYER_CLASSES = ['player']
+# Construction storage of a player station. Its trades are attributed to the station it builds.
+BUILDSTORAGE_CLASSES = ['buildstorage']
 ALL_CLASSES = SHIP_CLASSES + STATION_CLASSES + PLAYER_CLASSES
 
 LOAD_MESSAGES = [

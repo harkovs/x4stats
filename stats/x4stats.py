@@ -8,7 +8,8 @@ from pathlib import Path
 import os
 import time
 import shutil
-from stats.constants import ECO_ORDERS, SHIP_CLASSES, STATION_CLASSES, PLAYER_CLASSES, ALL_CLASSES, LOAD_MESSAGES
+from stats.constants import ECO_ORDERS, SHIP_CLASSES, STATION_CLASSES, PLAYER_CLASSES, BUILDSTORAGE_CLASSES, ALL_CLASSES, \
+    LOAD_MESSAGES
 import random
 
 
@@ -21,6 +22,7 @@ class X4stats:
         self.game_time = None
         self.own_ships = None
         self.own_ship_ids = None
+        self.id_aliases = {}
         self.player_id = None
         self.sales = None
         self.save_location = save_location
@@ -70,6 +72,10 @@ class X4stats:
         entries_type = None
         entries_condensed = False
         connections = []
+        listeners = []
+        # (player entity id or None, path depth) for every open component. Components are nested (pilots in ships,
+        # docked ships in stations), so the owning player entity has to be restored when a nested one closes.
+        entity_stack = []
         cur_player_entity = None
         cur_connection_type = None
         cur_connection_id = None
@@ -89,7 +95,7 @@ class X4stats:
                     elif path == ['savegame', 'economylog', 'entries']:
                         entries_type = elem.attrib['type']
                         # check for condensed money log
-                        if 'condensed' in elem.attrib and elem.attrib['condensed'] == 1:
+                        if elem.attrib.get('condensed') == '1':
                             entries_condensed = True
                         else:
                             entries_condensed = False
@@ -103,12 +109,24 @@ class X4stats:
                             transfers.append(elem.attrib)
                     # get player asset info
                     elif (path[0:4] == ['savegame', 'universe', 'component', 'connections']
-                            and elem.tag == 'component'
-                            and 'owner' in elem.attrib
-                            and elem.attrib['owner'] == 'player'):
-                        # store id for commander/subordinate connections
-                        cur_player_entity = elem.attrib['id']
-                        assets.append(elem.attrib)
+                            and elem.tag == 'component'):
+                        if elem.attrib.get('owner') == 'player':
+                            # store id for commander/subordinate connections
+                            cur_player_entity = elem.attrib['id']
+                            assets.append(elem.attrib)
+                        elif 'owner' in elem.attrib:
+                            cur_player_entity = None
+                        # components without owner (storage, engines, ...) belong to their parent entity
+                        entity_stack.append((cur_player_entity, len(path)))
+                    # listeners of a player entity, used to link build storages to their station
+                    elif (cur_player_entity
+                          and elem.tag == 'listener'
+                          and len(path) == entity_stack[-1][1] + 2
+                          and 'listener' in elem.attrib):
+                        listeners.append({
+                            'player_entity': cur_player_entity,
+                            'listener': elem.attrib['listener']
+                        })
                     # check for subordinates and commander connections
                     elif (cur_player_entity
                           and elem.tag == 'connection'
@@ -135,10 +153,9 @@ class X4stats:
                 if event == 'end':
                     # remove current player ship entry
                     if (path[0:4] == ['savegame', 'universe', 'component', 'connections']
-                          and elem.tag == 'component'
-                          and 'owner' in elem.attrib
-                          and elem.attrib['owner'] == 'player'):
-                        cur_player_entity = None
+                          and elem.tag == 'component'):
+                        entity_stack.pop()
+                        cur_player_entity = entity_stack[-1][0] if entity_stack else None
                     # Remove connection type subordinates
                     elif (cur_player_entity
                           and elem.tag == 'connection'
@@ -162,6 +179,7 @@ class X4stats:
             assets=assets,
             connections=connections,
             orders=default_orders)
+        self.id_aliases = self.__calc_buildstorage_aliases(assets=assets, listeners=listeners)
         self.print_random_load_msg()
 
         # calculate sales
@@ -287,6 +305,12 @@ class X4stats:
     def __calc_sales(self, trades, transfers):
         sales_list = []
         for elem in trades:
+            # attribute build storage trades to the station being built
+            if elem.get("seller") in self.id_aliases or elem.get("buyer") in self.id_aliases:
+                elem = dict(elem)
+                for role in ("seller", "buyer"):
+                    if elem.get(role) in self.id_aliases:
+                        elem[role] = self.id_aliases[elem[role]]
 
             try:
                 if ('seller' in elem
@@ -476,6 +500,36 @@ class X4stats:
         #     print(i)
         return info, ids, player_id
 
+    # Map player build storage ids to the id of the station they build. A station lists its build storage as a
+    # 'killed' listener. Build storages without a station are kept as their own entry so their trades still count.
+    def __calc_buildstorage_aliases(self, assets, listeners):
+        aliases = {}
+        station_ids = {s["id"] for s in self.own_ships if s["class"] in STATION_CLASSES}
+        for elem in assets:
+            if elem.get("class") not in BUILDSTORAGE_CLASSES:
+                continue
+            bs_id = elem["id"]
+            for lis in listeners:
+                if lis["listener"] == bs_id and lis["player_entity"] in station_ids:
+                    aliases[bs_id] = lis["player_entity"]
+                    break
+            else:
+                name = "Build storage " + elem.get("code", bs_id)
+                self.own_ships.append({
+                    "type": elem.get("macro"),
+                    "id": bs_id,
+                    "name": name,
+                    "code": elem.get("code"),
+                    "subordinate_cons": [],
+                    "commander_cons": [],
+                    "class": elem["class"],
+                    "commander_id": bs_id,
+                    "commander_name": name,
+                    "default_order": None,
+                })
+                self.own_ship_ids.append(bs_id)
+        return aliases
+
     def get_id_attributes(self, ship_id):
         for c in self.own_ships:
             if c["id"] == ship_id:
@@ -510,7 +564,7 @@ class X4stats:
 
         # sort by owner and then time
         mutations.sort(
-            key=lambda l: (l["owner"], l["time"])
+            key=lambda l: (l["owner"], float(l["time"]))
         )
 
         # for m in mutations:
