@@ -737,3 +737,53 @@ a.stat-link .stat-label::after {
   font-size: 1.25rem;
   font-weight: 500;
 }
+
+/* ---------- New save notice ---------- */
+
+.save-notice {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 10px 10px 16px;
+  border-radius: 999px;
+  background-color: var(--surface-raised);
+  border: 1px solid var(--border-strong);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  font-size: 1.4rem;
+  font-weight: 500;
+}
+
+.save-notice[hidden] {
+  display: none;
+}
+
+.save-notice .nav-icon {
+  color: var(--accent);
+}
+
+.save-notice button {
+  border: 0;
+  border-radius: 999px;
+  padding: 6px 14px;
+  background-color: var(--accent);
+  color: #1c0d04;
+  font-family: var(--font);
+  font-size: 1.3rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.save-notice button:hover {
+  filter: brightness(1.1);
+}
+
+@media (max-width: 760px) {
+  .save-notice {
+    right: 16px;
+    bottom: 16px;
+  }
+}

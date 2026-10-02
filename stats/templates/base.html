@@ -76,12 +76,39 @@
 {% block content %}{% endblock %}
 </main>
 </div>
+<div class="save-notice" id="save-notice" hidden>
+    {{ icon('reload') }}<span>New save loaded</span>
+    <button type="button" onclick="location.reload()">Refresh</button>
+</div>
 {% block scripts %}
 <script>
     document.getElementById('sidebar-toggle').addEventListener('click', function () {
         var collapsed = document.documentElement.classList.toggle('sidebar-collapsed');
         try { localStorage.setItem('x4-sidebar', collapsed ? 'collapsed' : 'open'); } catch (e) {}
     });
+
+    // Pick up saves loaded in the background: refresh the page, unless the visitor filtered, sorted or toggled
+    // something on it, then only offer a refresh so their view isn't thrown away.
+    (function () {
+        var version = {{ save_version | tojson }};
+        function touched() {
+            var filtered = Array.prototype.some.call(document.querySelectorAll('.table-search'), function (i) { return i.value; });
+            return filtered || !!document.querySelector('th.sort-asc, th.sort-desc, .ware-pill:not(.active)');
+        }
+        // the next check is only scheduled once this one has answered, so checks never pile up
+        function check() {
+            fetch({{ url_for('save_status') | tojson }}).then(function (r) { return r.json(); }).then(function (d) {
+                if (d.version === version) {
+                    setTimeout(check, 15000);
+                } else if (touched()) {
+                    document.getElementById('save-notice').hidden = false;
+                } else {
+                    location.reload();
+                }
+            }).catch(function () { setTimeout(check, 15000); });
+        }
+        setTimeout(check, 15000);
+    })();
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="{{ url_for('static', filename='scripts/charts.js') }}"></script>

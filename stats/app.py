@@ -4,7 +4,7 @@ import sys
 import threading
 import time
 from flask import Flask
-from flask import g, render_template, redirect, request, url_for
+from flask import g, jsonify, render_template, redirect, request, url_for
 from stats.x4stats import X4stats
 from stats.events import EventStore
 from stats.notify import TelegramNotifier, format_event
@@ -46,6 +46,9 @@ data_lock = threading.RLock()
 
 @app.before_request
 def lock_data():
+    # the save status poll only reads one value and must answer while a reload is running
+    if request.endpoint == 'save_status':
+        return
     data_lock.acquire()
     g.data_locked = True
 
@@ -102,6 +105,7 @@ def inject_shell():
     return {
         'player_name': x4stats.get_player_name(),
         'game_hours': round(x4stats.get_game_time() / 3600, 1),
+        'save_version': x4stats.get_save_version(),
     }
 
 
@@ -445,6 +449,12 @@ def transactions(hours=None):
 
 
 # Re-check for a newer save, then go back to the page the link was clicked on (?next=<endpoint>)
+# Polled by open pages to detect that a newer save was loaded in the background
+@app.route('/api/save', methods=['GET'])
+def save_status():
+    return jsonify(version=x4stats.get_save_version())
+
+
 @app.route('/reload', methods=['GET'])
 @app.route('/reload/', methods=['GET'])
 @app.route('/reload/<int:hours>', methods=['GET'])

@@ -39,6 +39,8 @@ class X4stats:
         self.save_mtime = None
         self.game_guid = None
         self.loss_events = []
+        # identifies the loaded save, set when a load completes; lets open pages notice a newer save
+        self.save_version = None
         self.check_for_new_file()
         pd.set_option('display.max_rows', None)
         # print(self.player_id)
@@ -214,10 +216,15 @@ class X4stats:
 
         xml = None
 
+        # stays the same across a restart on the same save, changes for any other save
+        self.save_version = f"{self.game_guid}:{self.game_time}:{self.save_mtime}"
         print(" * Loading complete")
 
     def get_game_time(self):
         return self.game_time
+
+    def get_save_version(self):
+        return self.save_version
 
     def get_game_guid(self):
         return self.game_guid
