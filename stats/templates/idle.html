@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% import "_macros.html" as macros %}
+
+{% block content %}
+<div class="page">
+    <div class="page-header">
+        <h1>Idle ships</h1>
+        <span class="subtitle">Traders and miners with no trade value &middot; showing {{ hours | safe }}</span>
+    </div>
+
+    {{ macros.hour_filter('idle', hours_raw) }}
+
+    <div class="card">
+        {% if inactive_rows %}
+        <div class="table-scroll">{{ macros.data_table(inactive_columns, inactive_rows, 'inactive-table') }}</div>
+        {% else %}
+        <p class="empty-state">Every trader and miner made a trade in this period.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

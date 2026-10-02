@@ -4,6 +4,7 @@
   var TEXT = '#b3b3b3';
   var MUTED = '#7c7c7c';
   var SURFACE = '#181818';
+  var NEGATIVE = '#ee5d86';
   var FONT = '"Inter", system-ui, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif';
 
   Chart.defaults.font.family = FONT;
@@ -80,31 +81,36 @@
   window.X4Charts = {
     wareColor: wareColor,
 
-    bar: function (canvasId, labels, values) {
+    // opts.horizontal: bars along the y axis (for long labels). Negative bars are drawn in the critical colour.
+    bar: function (canvasId, labels, values, opts) {
       var el = document.getElementById(canvasId);
       if (!el) return;
+      opts = opts || {};
+      var valueAxis = opts.horizontal ? 'x' : 'y';
+      var labelAxis = opts.horizontal ? 'y' : 'x';
+      var scales = {};
+      scales[labelAxis] = { grid: { color: GRID, display: !opts.horizontal }, ticks: { color: TEXT, autoSkip: !opts.horizontal } };
+      scales[valueAxis] = { grid: { color: GRID }, ticks: { color: TEXT, callback: money }, beginAtZero: true };
       new Chart(el, {
         type: 'bar',
         data: {
           labels: labels,
           datasets: [{
             data: values,
-            backgroundColor: COLORS[0],
+            backgroundColor: values.map(function (v) { return v < 0 ? NEGATIVE : COLORS[0]; }),
             borderRadius: 4,
             maxBarThickness: 48,
           }],
         },
         options: {
+          indexAxis: labelAxis,
           responsive: true,
           maintainAspectRatio: false,
           plugins: {
             legend: { display: false },
-            tooltip: { callbacks: { label: function (ctx) { return money(ctx.parsed.y); } } },
+            tooltip: { callbacks: { label: function (ctx) { return money(ctx.parsed[valueAxis]); } } },
           },
-          scales: {
-            x: { grid: { color: GRID }, ticks: { color: TEXT } },
-            y: { grid: { color: GRID }, ticks: { color: TEXT, callback: money }, beginAtZero: true },
-          },
+          scales: scales,
         },
       });
     },

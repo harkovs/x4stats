@@ -7,15 +7,17 @@
 </div>
 {% endmacro %}
 
-{% macro data_table(columns, rows, table_id) %}
+{% macro data_table(columns, rows, table_id, searchable=True) %}
+{% if searchable %}
 <div class="table-toolbar">
     <input type="search" class="table-search" data-table-target="{{ table_id }}" placeholder="Filter&hellip;">
 </div>
+{% endif %}
 <table class="data-table" id="{{ table_id }}">
     <thead>
         <tr>
         {% for col in columns %}
-            <th class="{{ 'num' if col.type in ('money', 'number', 'percent') else '' }}">{{ col.label }}</th>
+            <th class="{{ 'num' if col.type in ('money', 'number', 'decimal', 'percent') else '' }}">{{ col.label }}</th>
         {% endfor %}
         </tr>
     </thead>
@@ -26,6 +28,8 @@
             {% set raw = row[col.key] %}
             {% if col.type == 'money' or col.type == 'number' %}
                 <td class="num {{ 'positive' if col.type == 'money' and raw > 0 else 'negative' if col.type == 'money' and raw < 0 else '' }}" data-sort-value="{{ raw }}">{{ raw | money }}</td>
+            {% elif col.type == 'decimal' %}
+                <td class="num" data-sort-value="{{ raw }}">{{ '%.1f' | format(raw) | replace('.', ',') }}</td>
             {% elif col.type == 'percent' %}
                 <td class="num {{ 'positive' if raw > 0 else 'negative' if raw < 0 else '' }}" data-sort-value="{{ raw }}">{{ (raw * 100) | round(1) }}%</td>
             {% else %}

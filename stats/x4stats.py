@@ -9,7 +9,7 @@ import os
 import time
 import shutil
 from stats.constants import ECO_ORDERS, SHIP_CLASSES, STATION_CLASSES, PLAYER_CLASSES, BUILDSTORAGE_CLASSES, ALL_CLASSES, \
-    LOAD_MESSAGES
+    LOAD_MESSAGES, SHIP_RACES, SHIP_ROLES
 import random
 
 
@@ -222,17 +222,58 @@ class X4stats:
 
     def __calc_df_per_ship(self, hours=None):
         df = self.get_df_sales(hours)
-        df_per_ship = df.drop(["time", "ware", "hours_since_event"], axis=1) \
-            .groupby(["ship_id", "ship_class", "commander_name", "default_order", "ship_code", "ship_name", "ship_type"]
-                     , dropna=False).sum().reset_index()
-        # print(df_per_ship.head())
-
-        df_per_ship.columns = ["ship_id", "ship_class", "commander_name", "default_order", "ship_code", "ship_name"
-            , "ship_type", "value", "sales", "costs", "volume"]
+        # a trade is a row with a ware and a value; zero-value filler rows and account mutations don't count
+        df = df.assign(trades=(df["ware"].notna()
+                               & ~df["ware"].isin(["sellship", "restock"])
+                               & (df["value"] != 0)).astype(int))
+        df_per_ship = df.groupby(["ship_id", "ship_class", "commander_name", "default_order", "ship_code", "ship_name",
+                                  "ship_type"], dropna=False)[["value", "sales", "costs", "volume", "trades"]] \
+            .sum().reset_index()
+        df_per_ship["ship_type_name"] = df_per_ship["ship_type"].map(self.ship_type_label)
 
         df_per_ship = self.__per_x_help(df_per_ship)
 
         return df_per_ship
+
+    # Ships only (no stations/player), ranked by profit
+    def get_df_ships(self, hours=None):
+        df = self.__calc_df_per_ship(hours)
+        df = df[df["ship_class"].isin(SHIP_CLASSES)].copy()
+        df["profit_per_trade"] = (df["value"] / df["trades"].where(df["trades"] > 0)).fillna(0).round(0)
+        return df.sort_values("value", ascending=False)
+
+    # Aggregate ships per ship type (macro)
+    def get_df_per_ship_type(self, hours=None):
+        df = self.get_df_ships(hours)
+        df_per_type = df.groupby(["ship_type", "ship_type_name", "ship_class"], dropna=False).agg(
+            ships=("ship_id", "nunique"),
+            trades=("trades", "sum"),
+            value=("value", "sum"),
+            sales=("sales", "sum"),
+            costs=("costs", "sum"),
+            volume=("volume", "sum"),
+        ).reset_index()
+        df_per_type = self.__per_x_help(df_per_type)
+        df_per_type["profit_per_ship"] = (df_per_type["value"] / df_per_type["ships"]).round(0)
+        df_per_type["trades_per_ship"] = (df_per_type["trades"] / df_per_type["ships"]).round(1)
+        return df_per_type.sort_values("value", ascending=False)
+
+    # ship_bor_m_miner_solid_01_a_macro -> "Boron M Miner (solid) 01". Falls back to the macro for other shapes.
+    @staticmethod
+    def ship_type_label(macro):
+        if not isinstance(macro, str):
+            return macro
+        parts = macro.split("_")
+        if len(parts) < 6 or parts[0] != "ship" or parts[-1] != "macro":
+            return macro
+        race, size, number, variant = parts[1], parts[2], parts[-3], parts[-2]
+        role = "_".join(parts[3:-3])
+        label = " ".join([
+            SHIP_RACES.get(race, race.upper()),
+            size.upper(),
+            SHIP_ROLES.get(role, role.replace("_", " ").capitalize()),
+        ]).strip()
+        return f"{label} {number}" + (variant if variant != "a" else "")
 
     # geen trade waarde in de laatste X uren, maar wel trade orders
     def get_idle_traders_miners(self, hours):
@@ -240,7 +281,7 @@ class X4stats:
         return df.loc[
             (df['default_order'].isin(ECO_ORDERS))
             & (df['ship_class'].isin(SHIP_CLASSES))
-            & (df['value'] == 0)
+            & (df['trades'] == 0)
         ]
 
     # df['ship_class'].isin(SHIP_CLASSES), df['value'] == 0
@@ -252,7 +293,7 @@ class X4stats:
             (df['default_order'].isin(ECO_ORDERS))
             & (df['ship_class'].isin(SHIP_CLASSES))
         ]
-        active = eligible.loc[eligible['value'] != 0]
+        active = eligible.loc[eligible['trades'] > 0]
         return len(active), len(eligible)
 
     def get_df_per_commander(self, hours=None):
@@ -444,7 +485,8 @@ class X4stats:
                         ship_id = elem["id"]
                     if "code" in elem:
                         code = elem["code"]
-                    if "name" in elem:
+                    # "{page,id}" names are untranslated text references, show the code instead
+                    if "name" in elem and not elem["name"].startswith("{"):
                         name = elem["name"]
                     else:
                         name = code

@@ -24,6 +24,31 @@ PLAYER_CLASSES = ['player']
 BUILDSTORAGE_CLASSES = ['buildstorage']
 ALL_CLASSES = SHIP_CLASSES + STATION_CLASSES + PLAYER_CLASSES
 
+# Ship macros look like ship_<race>_<size>_<role>_<nn>_<variant>_macro. Used to build readable ship type labels.
+SHIP_RACES = {
+    'arg': 'Argon',
+    'atf': 'Terran (ATF)',
+    'bor': 'Boron',
+    'gen': 'Generic',
+    'kha': "Kha'ak",
+    'par': 'Paranid',
+    'pir': 'Pirate',
+    'spl': 'Split',
+    'tel': 'Teladi',
+    'ter': 'Terran',
+    'xen': 'Xenon',
+    'yak': 'Yaki',
+}
+SHIP_ROLES = {
+    'miner_solid': 'Miner (solid)',
+    'miner_liquid': 'Miner (liquid)',
+    'trans_container': 'Transport (container)',
+    'trans_condensate': 'Transport (condensate)',
+    'heavyfighter': 'Heavy fighter',
+    'fightingdrone': 'Fighting drone',
+    'cv': 'Construction vessel',
+}
+
 LOAD_MESSAGES = [
     'Spawning Khaak base',
     'Buffing Xenon',

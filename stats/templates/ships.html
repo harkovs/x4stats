@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% import "_macros.html" as macros %}
+
+{% block content %}
+<div class="page">
+    <div class="page-header">
+        <h1>Ships</h1>
+        <span class="subtitle">Showing {{ hours | safe }} &middot; stations are only in the raw table at the bottom</span>
+    </div>
+
+    {{ macros.hour_filter('ships', hours_raw) }}
+
+    <div class="stat-row">
+        <div class="stat-tile">
+            <div class="stat-label">Ships</div>
+            <div class="stat-value">{{ ship_count }}</div>
+        </div>
+        <div class="stat-tile">
+            <div class="stat-label">Ships with trades</div>
+            <div class="stat-value">{{ trading_count }}</div>
+        </div>
+        <div class="stat-tile">
+            <div class="stat-label">Ship types</div>
+            <div class="stat-value">{{ type_count }}</div>
+        </div>
+        <div class="stat-tile">
+            <div class="stat-label">Avg. profit per trading ship</div>
+            <div class="stat-value {{ avg_profit_class }}">{{ avg_profit | money }}</div>
+        </div>
+    </div>
+
+    <h2 class="section-title" id="types">Per ship type</h2>
+    <div class="card">
+        <h2>Profit per ship, by type</h2>
+        <div class="chart-container" style="height: {{ [type_chart.labels | length * 34 + 60, 200] | max }}px">
+            <canvas id="type-chart"></canvas>
+        </div>
+    </div>
+    <div class="card">
+        <div class="table-scroll">{{ macros.data_table(type_columns, type_rows, 'type-table') }}</div>
+    </div>
+
+    <h2 class="section-title" id="per-ship">Profit per ship</h2>
+    <div class="card">
+        <h2>Ships with trades, by profit</h2>
+        <div class="chart-container" style="height: {{ [ship_chart.labels | length * 26 + 60, 200] | max }}px">
+            <canvas id="ship-chart"></canvas>
+        </div>
+    </div>
+    <div class="card">
+        <div class="table-scroll">{{ macros.data_table(ship_columns, ship_rows, 'ships-table') }}</div>
+    </div>
+
+    <h2 class="section-title" id="raw">All assets (raw)</h2>
+    <div class="card">
+        <div class="table-scroll">{{ macros.data_table(raw_columns, raw_rows, 'raw-table') }}</div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var typeChart = {{ type_chart | tojson }};
+    var shipChart = {{ ship_chart | tojson }};
+    X4Charts.bar('type-chart', typeChart.labels, typeChart.values, {horizontal: true});
+    X4Charts.bar('ship-chart', shipChart.labels, shipChart.values, {horizontal: true});
+});
+</script>
+{% endblock %}

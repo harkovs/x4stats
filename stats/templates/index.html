@@ -4,8 +4,8 @@
 {% block content %}
 <div class="page">
     <div class="page-header">
-        <h1>Game stats</h1>
-        <span class="subtitle">{{ hours | safe }} &middot; {{ game_time | safe }} hours of game time</span>
+        <h1>Overview</h1>
+        <span class="subtitle">Showing {{ hours | safe }} &middot; {{ game_time | safe }} hours of game time</span>
     </div>
 
     {{ macros.hour_filter('stats', hours_raw) }}
@@ -13,7 +13,7 @@
     <div class="stat-row">
         <div class="stat-tile">
             <div class="stat-label">Profit</div>
-            <div class="stat-value {{ profit_class }}">{{ profit }}</div>
+            <div class="stat-value {{ profit_class }}">{{ profit_value | money }}</div>
         </div>
         <div class="stat-tile">
             <div class="stat-label">Total sales</div>
@@ -31,119 +31,27 @@
             <div class="stat-label">Active traders</div>
             <div class="stat-value">{{ active_count }}/{{ eligible_count }}</div>
         </div>
+        <a class="stat-tile stat-link" href="{{ url_for('idle', hours=hours_raw) if hours_raw else url_for('idle') }}">
+            <div class="stat-label">Idle ships</div>
+            <div class="stat-value {{ 'negative' if idle_count else '' }}">{{ idle_count }}</div>
+        </a>
     </div>
 
-    <h2 class="section-title" id="trends">Trends</h2>
-    <div class="ware-toggle-row" id="ware-toggle-row">
-        <span class="ware-toggle-label">Wares:</span>
-    </div>
-
-    <div class="card">
-        <h2>Profit over time</h2>
-        <div class="chart-container">
-            <canvas id="profit-time-chart"></canvas>
-        </div>
-    </div>
-
-    <div class="card">
-        <h2>Margin over time</h2>
-        <div class="chart-container">
-            <canvas id="margin-time-chart"></canvas>
-        </div>
-    </div>
-
-    <div class="card">
-        <h2>Volume traded over time</h2>
-        <div class="chart-container">
-            <canvas id="volume-time-chart"></canvas>
-        </div>
-    </div>
-
-    <h2 class="section-title" id="commanders">Commanders</h2>
-    <div class="card">
-        <h2>Trade value per commander</h2>
-        <div class="chart-container chart-tall">
-            <canvas id="commander-chart"></canvas>
-        </div>
-    </div>
-
-    <div class="card">
-        <h2>Profit vs. margin per commander</h2>
-        <div class="chart-container chart-tall">
-            <canvas id="scatter-chart"></canvas>
-        </div>
-    </div>
-
-    <h2 class="section-title" id="wares">Wares</h2>
     <div class="card-grid">
         <div class="card">
-            <h2>Wares sold</h2>
-            <div class="chart-container">
-                <canvas id="sales-pie"></canvas>
+            <div class="card-head">
+                <h2>Top ships</h2>
+                <a class="card-link" href="{{ url_for('ships', hours=hours_raw) if hours_raw else url_for('ships') }}">All ships</a>
             </div>
+            <div class="table-scroll">{{ macros.data_table(top_ship_columns, top_ship_rows, 'top-ships', searchable=False) }}</div>
         </div>
         <div class="card">
-            <h2>Wares bought</h2>
-            <div class="chart-container">
-                <canvas id="costs-pie"></canvas>
+            <div class="card-head">
+                <h2>Top wares</h2>
+                <a class="card-link" href="{{ url_for('wares', hours=hours_raw) if hours_raw else url_for('wares') }}">All wares</a>
             </div>
+            <div class="table-scroll">{{ macros.data_table(top_ware_columns, top_ware_rows, 'top-wares', searchable=False) }}</div>
         </div>
     </div>
-
-    <div class="card">
-        <h3>Wares (sorted by profit)</h3>
-        <div class="table-scroll">{{ macros.data_table(ware_columns, ware_rows, 'ware-table') }}</div>
-    </div>
-
-    <h2 class="section-title" id="idle">Idle ships</h2>
-    <div class="card">
-        <h3>Inactive traders and miners (no trade value in {{ hours | safe }})</h3>
-        <div class="table-scroll">{{ macros.data_table(inactive_columns, inactive_rows, 'inactive-table') }}</div>
-    </div>
-
-    <h2 class="section-title" id="ships">All ships</h2>
-    <div class="card">
-        <h3>Raw ship statistics</h3>
-        <div class="table-scroll">{{ macros.data_table(ship_columns, ship_rows, 'ship-table') }}</div>
-    </div>
 </div>
-
-<script>
-document.addEventListener('DOMContentLoaded', function () {
-    var commanderChart = {{ commander_chart | tojson }};
-    var scatterData = {{ scatter_data | tojson }};
-    var salesPie = {{ sales_pie | tojson }};
-    var costsPie = {{ costs_pie | tojson }};
-    var timeSeries = {{ time_series | tojson }};
-
-    X4Charts.bar('commander-chart', commanderChart.labels, commanderChart.values);
-    X4Charts.scatter('scatter-chart', scatterData);
-    X4Charts.pie('sales-pie', salesPie.labels, salesPie.values);
-    X4Charts.pie('costs-pie', costsPie.labels, costsPie.values);
-
-    var wareCharts = [
-        X4Charts.multiLine('profit-time-chart', timeSeries.labels, timeSeries.wares, timeSeries.series, 'profit'),
-        X4Charts.multiLine('margin-time-chart', timeSeries.labels, timeSeries.wares, timeSeries.series, 'margin', {percent: true}),
-        X4Charts.multiLine('volume-time-chart', timeSeries.labels, timeSeries.wares, timeSeries.series, 'volume'),
-    ];
-
-    var toggleRow = document.getElementById('ware-toggle-row');
-    timeSeries.wares.forEach(function (ware, idx) {
-        var btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'ware-pill active';
-        btn.style.setProperty('--ware-color', X4Charts.wareColor(idx));
-        btn.textContent = ware;
-        btn.addEventListener('click', function () {
-            var active = btn.classList.toggle('active');
-            wareCharts.forEach(function (chart) {
-                if (!chart) return;
-                chart.setDatasetVisibility(idx, active);
-                chart.update();
-            });
-        });
-        toggleRow.appendChild(btn);
-    });
-});
-</script>
 {% endblock %}

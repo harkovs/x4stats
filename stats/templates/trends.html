@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% import "_macros.html" as macros %}
+
+{% block content %}
+<div class="page">
+    <div class="page-header">
+        <h1>Trends</h1>
+        <span class="subtitle">Showing {{ hours | safe }} &middot; per hour, per ware</span>
+    </div>
+
+    {{ macros.hour_filter('trends', hours_raw) }}
+
+    <div class="ware-toggle-row" id="ware-toggle-row">
+        <span class="ware-toggle-label">Wares:</span>
+    </div>
+
+    <div class="card">
+        <h2>Profit over time</h2>
+        <div class="chart-container">
+            <canvas id="profit-time-chart"></canvas>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Margin over time</h2>
+        <div class="chart-container">
+            <canvas id="margin-time-chart"></canvas>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Volume traded over time</h2>
+        <div class="chart-container">
+            <canvas id="volume-time-chart"></canvas>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var timeSeries = {{ time_series | tojson }};
+
+    var wareCharts = [
+        X4Charts.multiLine('profit-time-chart', timeSeries.labels, timeSeries.wares, timeSeries.series, 'profit'),
+        X4Charts.multiLine('margin-time-chart', timeSeries.labels, timeSeries.wares, timeSeries.series, 'margin', {percent: true}),
+        X4Charts.multiLine('volume-time-chart', timeSeries.labels, timeSeries.wares, timeSeries.series, 'volume'),
+    ];
+
+    var toggleRow = document.getElementById('ware-toggle-row');
+    timeSeries.wares.forEach(function (ware, idx) {
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'ware-pill active';
+        btn.style.setProperty('--ware-color', X4Charts.wareColor(idx));
+        btn.textContent = ware;
+        btn.addEventListener('click', function () {
+            var active = btn.classList.toggle('active');
+            wareCharts.forEach(function (chart) {
+                if (!chart) return;
+                chart.setDatasetVisibility(idx, active);
+                chart.update();
+            });
+        });
+        toggleRow.appendChild(btn);
+    });
+});
+</script>
+{% endblock %}

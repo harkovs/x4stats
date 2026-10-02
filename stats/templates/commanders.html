@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% import "_macros.html" as macros %}
+
+{% block content %}
+<div class="page">
+    <div class="page-header">
+        <h1>Commanders</h1>
+        <span class="subtitle">Showing {{ hours | safe }} &middot; ships grouped under their commander, unassigned ships stand alone</span>
+    </div>
+
+    {{ macros.hour_filter('commanders', hours_raw) }}
+
+    <div class="card">
+        <h2>Trade value per commander</h2>
+        <div class="chart-container chart-tall">
+            <canvas id="commander-chart"></canvas>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Profit vs. margin per commander</h2>
+        <div class="chart-container chart-tall">
+            <canvas id="scatter-chart"></canvas>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var commanderChart = {{ commander_chart | tojson }};
+    var scatterData = {{ scatter_data | tojson }};
+    X4Charts.bar('commander-chart', commanderChart.labels, commanderChart.values);
+    X4Charts.scatter('scatter-chart', scatterData);
+});
+</script>
+{% endblock %}

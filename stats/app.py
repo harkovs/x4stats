@@ -2,7 +2,7 @@ import math
 import socket
 import sys
 from flask import Flask
-from flask import render_template
+from flask import render_template, redirect, request, url_for
 from stats.x4stats import X4stats
 from pathlib import Path
 
@@ -102,10 +102,17 @@ def get_ware_time_series_data(df):
     return {'labels': labels, 'wares': wares, 'series': series}
 
 
+def get_bar_data(df, label_column, value_column):
+    return {
+        'labels': [str(v) for v in df[label_column]],
+        'values': [float(v) for v in df[value_column]],
+    }
+
+
 def table_columns_ship(df):
     return [{'key': c, 'label': c, 'type': (
         'money' if c == 'value' else
-        'number' if c in ('sales', 'costs', 'volume') else
+        'number' if c in ('sales', 'costs', 'volume', 'trades') else
         'percent' if c == 'margin' else
         'text'
     )} for c in df.columns]
@@ -130,6 +137,44 @@ TABLE_COLUMNS_WARE = [
     {'key': 'margin', 'label': 'margin', 'type': 'percent'},
 ]
 
+TABLE_COLUMNS_SHIP_TYPE = [
+    {'key': 'ship_type_name', 'label': 'ship type', 'type': 'text'},
+    {'key': 'ships', 'label': 'ships', 'type': 'number'},
+    {'key': 'trades', 'label': 'trades', 'type': 'number'},
+    {'key': 'trades_per_ship', 'label': 'trades / ship', 'type': 'decimal'},
+    {'key': 'sales', 'label': 'total sales', 'type': 'number'},
+    {'key': 'costs', 'label': 'total bought', 'type': 'number'},
+    {'key': 'value', 'label': 'profit', 'type': 'money'},
+    {'key': 'profit_per_ship', 'label': 'profit / ship', 'type': 'money'},
+    {'key': 'margin', 'label': 'margin', 'type': 'percent'},
+]
+
+TABLE_COLUMNS_SHIPS = [
+    {'key': 'ship_name', 'label': 'name', 'type': 'text'},
+    {'key': 'ship_code', 'label': 'code', 'type': 'text'},
+    {'key': 'ship_type_name', 'label': 'ship type', 'type': 'text'},
+    {'key': 'commander_name', 'label': 'commander', 'type': 'text'},
+    {'key': 'default_order', 'label': 'order', 'type': 'text'},
+    {'key': 'trades', 'label': 'trades', 'type': 'number'},
+    {'key': 'volume', 'label': 'volume', 'type': 'number'},
+    {'key': 'value', 'label': 'profit', 'type': 'money'},
+    {'key': 'profit_per_trade', 'label': 'profit / trade', 'type': 'money'},
+    {'key': 'margin', 'label': 'margin', 'type': 'percent'},
+]
+
+TABLE_COLUMNS_TOP_SHIPS = [
+    {'key': 'ship_name', 'label': 'ship', 'type': 'text'},
+    {'key': 'trades', 'label': 'trades', 'type': 'number'},
+    {'key': 'value', 'label': 'profit', 'type': 'money'},
+]
+
+TABLE_COLUMNS_TOP_WARES = [
+    {'key': 'ware', 'label': 'ware', 'type': 'text'},
+    {'key': 'volume', 'label': 'volume traded', 'type': 'number'},
+    {'key': 'value', 'label': 'profit', 'type': 'money'},
+    {'key': 'margin', 'label': 'margin', 'type': 'percent'},
+]
+
 TABLE_COLUMNS_TRANSACTIONS = [
     {'key': 'ship_name', 'label': 'name', 'type': 'text'},
     {'key': 'ship_code', 'label': 'code', 'type': 'text'},
@@ -142,89 +187,157 @@ TABLE_COLUMNS_TRANSACTIONS = [
 ]
 
 
+def hours_context(hours):
+    # "look back N hours" path segment -> display text + raw value for links
+    if hours:
+        return {'hours': "past " + str(hours) + " hours", 'hours_raw': hours}
+    return {'hours': "all time", 'hours_raw': ''}
+
+
+def value_class(v):
+    return 'positive' if v > 0 else 'negative' if v < 0 else ''
+
+
+# Pages the "Update save" link may return to
+PAGES = ['stats', 'trends', 'commanders', 'wares', 'ships', 'idle', 'transactions']
+
+
 @app.route('/', methods=['GET'])
 def index():
-    return ''
+    return redirect(url_for('stats'))
 
 
 @app.route('/stats', methods=['GET'])
-@app.route('/stats/<hours>', methods=['GET'])
+@app.route('/stats/<int:hours>', methods=['GET'])
 def stats(hours=None):
     df_sales = x4stats.get_df_sales(hours, filter_zero_value=True)
-    df_per_ship = x4stats.get_df_per_ship(hours)
-    df_per_commander = x4stats.get_df_per_commander(hours)
     df_per_ware = x4stats.get_df_per_ware(hours)
-    df_per_hour_ware = x4stats.get_df_per_hour_ware(hours)
-    df_inactive_traders = x4stats.get_idle_traders_miners(hours)
+    df_ships = x4stats.get_df_ships(hours)
 
-    game_time = str(round(x4stats.get_game_time() / 3600, 2))
-    profit_value = int(x4stats.get_profit(df_sales))
-    profit = f'{profit_value:,}'.replace(',', '.')
-    profit_class = 'positive' if profit_value > 0 else 'negative' if profit_value < 0 else ''
-
+    profit_value = float(x4stats.get_profit(df_sales))
     total_sales = float(df_sales['sales'].sum())
     total_costs = float(df_sales['costs'].sum())
     margin_value = (total_sales - total_costs) / total_sales if total_sales else 0.0
-    margin_class = 'positive' if margin_value > 0 else 'negative' if margin_value < 0 else ''
     active_count, eligible_count = x4stats.get_active_traders_count(hours)
-
-    hours_par = "all time"
-    hours_raw = ''
-    if hours:
-        hours_par = "past " + str(hours) + " hours"
-        hours_raw = hours
 
     return render_template(
         'index.html',
-        commander_chart=get_commander_chart_data(df_per_commander),
-        scatter_data=get_scatter_data(df_per_commander),
-        sales_pie=get_ware_pie_data(df_per_ware, 'sales'),
-        costs_pie=get_ware_pie_data(df_per_ware, 'costs'),
-        time_series=get_ware_time_series_data(df_per_hour_ware),
-        game_time=game_time,
-        profit=profit,
-        profit_class=profit_class,
+        game_time=str(round(x4stats.get_game_time() / 3600, 2)),
+        profit_value=profit_value,
+        profit_class=value_class(profit_value),
         total_sales=total_sales,
         total_costs=total_costs,
         margin_value=margin_value,
-        margin_class=margin_class,
+        margin_class=value_class(margin_value),
         active_count=active_count,
         eligible_count=eligible_count,
-        hours=hours_par,
-        hours_raw=hours_raw,
-        inactive_columns=TABLE_COLUMNS_INACTIVE,
-        inactive_rows=df_inactive_traders.to_dict('records'),
-        ship_columns=table_columns_ship(df_per_ship),
-        ship_rows=df_per_ship.to_dict('records'),
+        idle_count=len(x4stats.get_idle_traders_miners(hours)),
+        top_ship_columns=TABLE_COLUMNS_TOP_SHIPS,
+        top_ship_rows=df_ships.head(5).to_dict('records'),
+        top_ware_columns=TABLE_COLUMNS_TOP_WARES,
+        top_ware_rows=df_per_ware.head(5).to_dict('records'),
+        **hours_context(hours),
+    )
+
+
+@app.route('/trends', methods=['GET'])
+@app.route('/trends/<int:hours>', methods=['GET'])
+def trends(hours=None):
+    return render_template(
+        'trends.html',
+        time_series=get_ware_time_series_data(x4stats.get_df_per_hour_ware(hours)),
+        **hours_context(hours),
+    )
+
+
+@app.route('/commanders', methods=['GET'])
+@app.route('/commanders/<int:hours>', methods=['GET'])
+def commanders(hours=None):
+    df_per_commander = x4stats.get_df_per_commander(hours)
+    return render_template(
+        'commanders.html',
+        commander_chart=get_commander_chart_data(df_per_commander),
+        scatter_data=get_scatter_data(df_per_commander),
+        **hours_context(hours),
+    )
+
+
+@app.route('/wares', methods=['GET'])
+@app.route('/wares/<int:hours>', methods=['GET'])
+def wares(hours=None):
+    df_per_ware = x4stats.get_df_per_ware(hours)
+    return render_template(
+        'wares.html',
+        sales_pie=get_ware_pie_data(df_per_ware, 'sales'),
+        costs_pie=get_ware_pie_data(df_per_ware, 'costs'),
         ware_columns=TABLE_COLUMNS_WARE,
         ware_rows=df_per_ware.to_dict('records'),
+        **hours_context(hours),
+    )
+
+
+@app.route('/idle', methods=['GET'])
+@app.route('/idle/<int:hours>', methods=['GET'])
+def idle(hours=None):
+    return render_template(
+        'idle.html',
+        inactive_columns=TABLE_COLUMNS_INACTIVE,
+        inactive_rows=x4stats.get_idle_traders_miners(hours).to_dict('records'),
+        **hours_context(hours),
+    )
+
+
+@app.route('/ships', methods=['GET'])
+@app.route('/ships/<int:hours>', methods=['GET'])
+def ships(hours=None):
+    df_ships = x4stats.get_df_ships(hours)
+    df_per_type = x4stats.get_df_per_ship_type(hours)
+    df_per_ship = x4stats.get_df_per_ship(hours)
+    trading = df_ships[df_ships['trades'] > 0]
+    avg_profit = float(trading['value'].mean()) if len(trading) else 0.0
+
+    return render_template(
+        'ships.html',
+        ship_count=len(df_ships),
+        trading_count=len(trading),
+        type_count=len(df_per_type),
+        avg_profit=avg_profit,
+        avg_profit_class=value_class(avg_profit),
+        type_chart=get_bar_data(df_per_type.sort_values('profit_per_ship', ascending=False),
+                                'ship_type_name', 'profit_per_ship'),
+        ship_chart=get_bar_data(trading, 'ship_name', 'value'),
+        type_columns=TABLE_COLUMNS_SHIP_TYPE,
+        type_rows=df_per_type.to_dict('records'),
+        ship_columns=TABLE_COLUMNS_SHIPS,
+        ship_rows=df_ships.to_dict('records'),
+        raw_columns=table_columns_ship(df_per_ship),
+        raw_rows=df_per_ship.to_dict('records'),
+        **hours_context(hours),
     )
 
 
 @app.route('/transactions', methods=['GET'])
-@app.route('/transactions/<hours>', methods=['GET'])
+@app.route('/transactions/<int:hours>', methods=['GET'])
 def transactions(hours=None):
     df_sales = x4stats.get_df_sales_sorted(hours, filter_zero_value=True)
-    hours_par = "all time"
-    hours_raw = ''
-    if hours:
-        hours_par = "past " + str(hours) + " hours"
-        hours_raw = hours
     return render_template(
         'transactions.html',
         transaction_columns=TABLE_COLUMNS_TRANSACTIONS,
         transaction_rows=df_sales.to_dict('records'),
-        hours=hours_par,
-        hours_raw=hours_raw,
+        **hours_context(hours),
     )
 
 
+# Re-check for a newer save, then go back to the page the link was clicked on (?next=<endpoint>)
 @app.route('/reload', methods=['GET'])
 @app.route('/reload/', methods=['GET'])
-@app.route('/reload/<hours>', methods=['GET'])
+@app.route('/reload/<int:hours>', methods=['GET'])
 def reload(hours=None):
     x4stats.check_for_new_file()
-    return stats(hours)
+    page = request.args.get('next')
+    if page not in PAGES:
+        page = 'stats'
+    return redirect(url_for(page, hours=hours) if hours else url_for(page))
 
 
 def port_in_use(host, port):

@@ -12,8 +12,8 @@
   --accent: #e38a52;
   --accent-soft: rgba(227, 138, 82, 0.14);
   --accent-tint: #22170f;
-  --good: #4cc38a;
-  --critical: #f2626f;
+  --good: var(--accent);
+  --critical: #ee5d86;
   --radius: 8px;
   --sidebar-width: 248px;
   --sidebar-collapsed: 72px;
@@ -674,4 +674,52 @@ table.data-table tbody tr:hover td.negative {
 
 .page-header h1 {
   letter-spacing: -0.03em;
+}
+
+/* ---------- Page bits ---------- */
+
+a.stat-link {
+  display: block;
+  color: inherit;
+}
+
+a.stat-link:hover {
+  text-decoration: none;
+}
+
+a.stat-link .stat-label::after {
+  content: ' \2192';
+  color: var(--text-muted);
+}
+
+.card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.card .card-head h2 {
+  margin-bottom: 0;
+}
+
+.card-link {
+  color: var(--text-secondary);
+  font-size: 1.3rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.card-link:hover {
+  color: var(--text-primary);
+}
+
+.empty-state {
+  color: var(--text-secondary);
+  margin: 4px 0;
+}
+
+.page > .stat-row + .card-grid {
+  margin-top: 24px;
 }

@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% import "_macros.html" as macros %}
+
+{% block content %}
+<div class="page">
+    <div class="page-header">
+        <h1>Wares</h1>
+        <span class="subtitle">Showing {{ hours | safe }}</span>
+    </div>
+
+    {{ macros.hour_filter('wares', hours_raw) }}
+
+    <div class="card-grid">
+        <div class="card">
+            <h2>Wares sold</h2>
+            <div class="chart-container">
+                <canvas id="sales-pie"></canvas>
+            </div>
+        </div>
+        <div class="card">
+            <h2>Wares bought</h2>
+            <div class="chart-container">
+                <canvas id="costs-pie"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Wares (sorted by profit)</h2>
+        <div class="table-scroll">{{ macros.data_table(ware_columns, ware_rows, 'ware-table') }}</div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var salesPie = {{ sales_pie | tojson }};
+    var costsPie = {{ costs_pie | tojson }};
+    X4Charts.pie('sales-pie', salesPie.labels, salesPie.values);
+    X4Charts.pie('costs-pie', costsPie.labels, costsPie.values);
+});
+</script>
+{% endblock %}
