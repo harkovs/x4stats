@@ -35,6 +35,10 @@
             <div class="stat-label">Idle ships</div>
             <div class="stat-value {{ 'negative' if idle_count else '' }}">{{ idle_count }}</div>
         </a>
+        <a class="stat-tile stat-link" href="{{ url_for('losses', hours=hours_raw) if hours_raw else url_for('losses') }}">
+            <div class="stat-label">Losses</div>
+            <div class="stat-value {{ 'negative' if lost_count else '' }}">{{ lost_count }}</div>
+        </a>
     </div>
 
     <div class="card-grid">

@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% import "_macros.html" as macros %}
+
+{% block content %}
+<div class="page">
+    <div class="page-header">
+        <h1>Losses</h1>
+        <span class="subtitle">Showing {{ hours | safe }} &middot; from the logbook, kept locally per game so history survives logbook trimming</span>
+    </div>
+
+    {{ macros.hour_filter('losses', hours_raw) }}
+
+    <div class="stat-row">
+        <div class="stat-tile">
+            <div class="stat-label">Destroyed</div>
+            <div class="stat-value {{ 'negative' if destroyed_count else '' }}">{{ destroyed_count }}</div>
+        </div>
+        <div class="stat-tile">
+            <div class="stat-label">Attacked, forced to flee</div>
+            <div class="stat-value">{{ attacked_count }}</div>
+        </div>
+        <div class="stat-tile">
+            <div class="stat-label">Last loss</div>
+            <div class="stat-value stat-value-small">
+                {% if last_loss %}{{ last_loss.name }} <span class="stat-note">{{ last_loss.hours_ago }}h ago</span>{% else %}None{% endif %}
+            </div>
+        </div>
+        <div class="stat-tile">
+            <div class="stat-label">Telegram alerts</div>
+            <div class="stat-value stat-value-small">
+                {% if telegram_on %}On <span class="stat-note">{{ 'losses and attacks' if telegram_attacks else 'losses only' }}</span>{% else %}Off <span class="stat-note">see config.example.py</span>{% endif %}
+            </div>
+        </div>
+    </div>
+
+    <h2 class="section-title" id="destroyed">Destroyed</h2>
+    <div class="card">
+        {% if destroyed_rows %}
+        <div class="table-scroll">{{ macros.data_table(destroyed_columns, destroyed_rows, 'destroyed-table') }}</div>
+        {% else %}
+        <p class="empty-state">No ships or stations lost in this period.</p>
+        {% endif %}
+    </div>
+
+    <h2 class="section-title" id="attacked">Attacked</h2>
+    <div class="card">
+        {% if attacked_rows %}
+        <div class="table-scroll">{{ macros.data_table(attacked_columns, attacked_rows, 'attacked-table') }}</div>
+        {% else %}
+        <p class="empty-state">No ships were forced to flee in this period.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

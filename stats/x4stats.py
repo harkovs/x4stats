@@ -11,6 +11,16 @@ import shutil
 from stats.constants import ECO_ORDERS, SHIP_CLASSES, STATION_CLASSES, PLAYER_CLASSES, BUILDSTORAGE_CLASSES, ALL_CLASSES, \
     LOAD_MESSAGES, SHIP_RACES, SHIP_ROLES
 import random
+import re
+
+
+# "TST-ST Megaera (PUP-753) was destroyed."
+LOSS_TITLE = re.compile(r"^(?P<name>.+?) \((?P<code>[A-Z]{3}-\d{3})\) was destroyed\.$")
+# "TST-ST Vincejo in sector Eighteen Billion was destroyed by VIG Ice Union Plunderer Barbarossa."
+LOSS_BY_TITLE = re.compile(r"^(?P<name>.+?) in sector (?P<location>.+?) was destroyed by (?P<attacker>.+?)\.$")
+# "FD-TSM Runa Jung was forced to flee after being attacked by BUC Corsair Prometheus in Morning Star IV. ..."
+ATTACKED_TITLE = re.compile(
+    r"^(?P<name>.+?) was forced to flee after being attacked by (?P<attacker>.+?) in (?P<location>.+?)\. ")
 
 
 class X4stats:
@@ -27,6 +37,8 @@ class X4stats:
         self.sales = None
         self.save_location = save_location
         self.save_mtime = None
+        self.game_guid = None
+        self.loss_events = []
         self.check_for_new_file()
         pd.set_option('display.max_rows', None)
         # print(self.player_id)
@@ -58,6 +70,8 @@ class X4stats:
             # trigger reload
             print(" * New save loading: " + str(p))
             self.reload(p_to)
+            return True
+        return False
 
     # (re)load save file
     def reload(self, save):
@@ -67,6 +81,7 @@ class X4stats:
         assets = []
         trades = []
         transfers = []
+        log_entries = []
         default_orders = []
         # Type of entry
         entries_type = None
@@ -92,6 +107,11 @@ class X4stats:
                     # Get game start time
                     if path == ['savegame', 'info', 'game']:
                         self.game_time = float(elem.attrib['time'])
+                        # identifies the playthrough across save files
+                        self.game_guid = elem.attrib.get('guid')
+                    # logbook messages about the player's own assets (attacks, losses, ...)
+                    elif path == ['savegame', 'log', 'entry'] and elem.attrib.get('category') == 'upkeep':
+                        log_entries.append(elem.attrib)
                     elif path == ['savegame', 'economylog', 'entries']:
                         entries_type = elem.attrib['type']
                         # check for condensed money log
@@ -183,6 +203,8 @@ class X4stats:
         self.print_random_load_msg()
 
         # calculate sales
+        self.loss_events = self.__calc_loss_events(log_entries)
+
         self.sales = self.__calc_sales(
             trades=trades,
             transfers=transfers
@@ -196,6 +218,12 @@ class X4stats:
 
     def get_game_time(self):
         return self.game_time
+
+    def get_game_guid(self):
+        return self.game_guid
+
+    def get_loss_events(self):
+        return self.loss_events
 
     def get_player_name(self):
         player = self.get_id_attributes(self.player_id) if self.player_id else None
@@ -668,6 +696,46 @@ class X4stats:
         print(mutation_types)
         return sales_list
 
+
+    # Turn logbook messages into destroyed/attacked events. The messages are localised game text, so this only
+    # recognises the English wording; other upkeep messages are ignored.
+    @staticmethod
+    def __calc_loss_events(log_entries):
+        events = []
+        for entry in log_entries:
+            title = entry.get("title", "")
+            # multi-line text uses a literal "[\012]" as line separator
+            text = entry.get("text", "").replace("[\\012]", "\n")
+            details = {}
+            for line in text.split("\n"):
+                key, sep, value = line.partition(": ")
+                if sep:
+                    details[key.strip()] = value.strip()
+
+            event = None
+            m = LOSS_TITLE.match(title)
+            if m:
+                event = {"kind": "destroyed", "name": m["name"], "code": m["code"],
+                         "location": details.get("Location"), "commander": details.get("Commander"),
+                         "attacker": details.get("Destroyed by")}
+            elif LOSS_BY_TITLE.match(title):
+                m = LOSS_BY_TITLE.match(title)
+                event = {"kind": "destroyed", "name": m["name"], "code": None, "location": m["location"],
+                         "commander": None, "attacker": m["attacker"]}
+            elif ATTACKED_TITLE.match(title):
+                m = ATTACKED_TITLE.match(title)
+                event = {"kind": "attacked", "name": m["name"], "code": None, "location": m["location"],
+                         "commander": None, "attacker": m["attacker"]}
+            elif " was destroyed" in title:
+                # unknown wording (e.g. stations): keep it so nothing is silently lost
+                event = {"kind": "destroyed", "name": title.split(" was destroyed")[0], "code": None,
+                         "location": details.get("Location"), "commander": details.get("Commander"),
+                         "attacker": details.get("Destroyed by")}
+
+            if event:
+                event.update({"time": float(entry["time"]), "title": title, "text": text})
+                events.append(event)
+        return events
 
     @staticmethod
     def print_random_load_msg():

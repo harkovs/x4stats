@@ -1,9 +1,13 @@
 import math
 import socket
 import sys
+import threading
+import time
 from flask import Flask
-from flask import render_template, redirect, request, url_for
+from flask import g, render_template, redirect, request, url_for
 from stats.x4stats import X4stats
+from stats.events import EventStore
+from stats.notify import TelegramNotifier, format_event
 from pathlib import Path
 
 app = Flask(__name__)
@@ -22,8 +26,67 @@ if not p.exists():
 HOST = '127.0.0.1'
 PORT = 2992
 
+# Optional settings, see config.example.py
+EVENTS_DB = app.config.get('EVENTS_DB', str(Path(app.root_path) / 'saves' / 'events.sqlite'))
+AUTO_RELOAD_SECONDS = app.config.get('AUTO_RELOAD_SECONDS', 60)
+TELEGRAM_BOT_TOKEN = app.config.get('TELEGRAM_BOT_TOKEN')
+TELEGRAM_CHAT_ID = app.config.get('TELEGRAM_CHAT_ID')
+TELEGRAM_NOTIFY_ATTACKS = app.config.get('TELEGRAM_NOTIFY_ATTACKS', False)
+# More new events than this in one save are summarised instead of sent one by one
+TELEGRAM_MAX_MESSAGES = 10
+
 # Loaded in main(), after the port check, so a second instance doesn't parse the whole save first
 x4stats = None
+event_store = None
+notifier = TelegramNotifier(TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID) if TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID else None
+
+# Requests and the background save check both use x4stats; a reload must not change it halfway through a request
+data_lock = threading.RLock()
+
+
+@app.before_request
+def lock_data():
+    data_lock.acquire()
+    g.data_locked = True
+
+
+@app.teardown_request
+def unlock_data(exc):
+    if g.pop('data_locked', False):
+        data_lock.release()
+
+
+# Store loss/attack events of the loaded save and send notifications for ones not seen before
+def sync_events():
+    new, first_import = event_store.record(x4stats.get_game_guid(), x4stats.get_loss_events())
+    if new:
+        print(f" * {len(new)} new loss/attack events" + (" (first import, no notifications)" if first_import else ""))
+    if not notifier or first_import:
+        return
+    to_send = [e for e in sorted(new, key=lambda e: e['time'])
+               if e['kind'] == 'destroyed' or TELEGRAM_NOTIFY_ATTACKS]
+    if not to_send:
+        return
+    messages = [format_event(e) for e in to_send[:TELEGRAM_MAX_MESSAGES]]
+    if len(to_send) > TELEGRAM_MAX_MESSAGES:
+        messages.append(f"X4: ... and {len(to_send) - TELEGRAM_MAX_MESSAGES} more events, see the Losses page")
+    # send outside the request/reload so a slow network doesn't hold the data lock
+    threading.Thread(target=lambda: [notifier.send(m) for m in messages], daemon=True).start()
+
+
+def refresh_save():
+    with data_lock:
+        if x4stats.check_for_new_file():
+            sync_events()
+
+
+def poll_saves(interval):
+    while True:
+        time.sleep(interval)
+        try:
+            refresh_save()
+        except Exception as e:
+            print(" * Background save check failed:", type(e).__name__, e)
 
 
 def number_formatter(n):
@@ -175,6 +238,24 @@ TABLE_COLUMNS_TOP_WARES = [
     {'key': 'margin', 'label': 'margin', 'type': 'percent'},
 ]
 
+TABLE_COLUMNS_DESTROYED = [
+    {'key': 'game_hours', 'label': 'game time (h)', 'type': 'decimal'},
+    {'key': 'hours_ago', 'label': 'hours ago', 'type': 'number'},
+    {'key': 'name', 'label': 'name', 'type': 'text'},
+    {'key': 'code', 'label': 'code', 'type': 'text'},
+    {'key': 'location', 'label': 'location', 'type': 'text'},
+    {'key': 'commander', 'label': 'commander', 'type': 'text'},
+    {'key': 'attacker', 'label': 'destroyed by', 'type': 'text'},
+]
+
+TABLE_COLUMNS_ATTACKED = [
+    {'key': 'game_hours', 'label': 'game time (h)', 'type': 'decimal'},
+    {'key': 'hours_ago', 'label': 'hours ago', 'type': 'number'},
+    {'key': 'name', 'label': 'name', 'type': 'text'},
+    {'key': 'location', 'label': 'location', 'type': 'text'},
+    {'key': 'attacker', 'label': 'attacked by', 'type': 'text'},
+]
+
 TABLE_COLUMNS_TRANSACTIONS = [
     {'key': 'ship_name', 'label': 'name', 'type': 'text'},
     {'key': 'ship_code', 'label': 'code', 'type': 'text'},
@@ -199,7 +280,7 @@ def value_class(v):
 
 
 # Pages the "Update save" link may return to
-PAGES = ['stats', 'trends', 'commanders', 'wares', 'ships', 'idle', 'transactions']
+PAGES = ['stats', 'trends', 'commanders', 'wares', 'ships', 'idle', 'losses', 'transactions']
 
 
 @app.route('/', methods=['GET'])
@@ -232,6 +313,7 @@ def stats(hours=None):
         active_count=active_count,
         eligible_count=eligible_count,
         idle_count=len(x4stats.get_idle_traders_miners(hours)),
+        lost_count=sum(1 for e in get_loss_events(hours) if e['kind'] == 'destroyed'),
         top_ship_columns=TABLE_COLUMNS_TOP_SHIPS,
         top_ship_rows=df_ships.head(5).to_dict('records'),
         top_ware_columns=TABLE_COLUMNS_TOP_WARES,
@@ -316,6 +398,40 @@ def ships(hours=None):
     )
 
 
+# Events of the current game from the local history, newest first, limited to the look-back window
+def get_loss_events(hours=None):
+    game_time = x4stats.get_game_time()
+    events = []
+    for e in event_store.get_events(x4stats.get_game_guid()):
+        hours_ago = math.floor((game_time - e['time']) / 3600)
+        if hours and hours_ago > int(hours) - 1:
+            continue
+        events.append({**e, 'hours_ago': hours_ago, 'game_hours': e['time'] / 3600,
+                       'what': 'Destroyed' if e['kind'] == 'destroyed' else 'Attacked'})
+    return events
+
+
+@app.route('/losses', methods=['GET'])
+@app.route('/losses/<int:hours>', methods=['GET'])
+def losses(hours=None):
+    events = get_loss_events(hours)
+    destroyed = [e for e in events if e['kind'] == 'destroyed']
+    attacked = [e for e in events if e['kind'] == 'attacked']
+    return render_template(
+        'losses.html',
+        destroyed_count=len(destroyed),
+        attacked_count=len(attacked),
+        last_loss=destroyed[0] if destroyed else None,
+        telegram_on=notifier is not None,
+        telegram_attacks=TELEGRAM_NOTIFY_ATTACKS,
+        destroyed_columns=TABLE_COLUMNS_DESTROYED,
+        destroyed_rows=destroyed,
+        attacked_columns=TABLE_COLUMNS_ATTACKED,
+        attacked_rows=attacked,
+        **hours_context(hours),
+    )
+
+
 @app.route('/transactions', methods=['GET'])
 @app.route('/transactions/<int:hours>', methods=['GET'])
 def transactions(hours=None):
@@ -333,7 +449,7 @@ def transactions(hours=None):
 @app.route('/reload/', methods=['GET'])
 @app.route('/reload/<int:hours>', methods=['GET'])
 def reload(hours=None):
-    x4stats.check_for_new_file()
+    refresh_save()
     page = request.args.get('next')
     if page not in PAGES:
         page = 'stats'
@@ -350,15 +466,21 @@ def port_in_use(host, port):
 
 
 def main():
-    global x4stats
+    global x4stats, event_store
     if port_in_use(HOST, PORT):
         print(f"Port {PORT} is already in use. Is X4stats already running? http://localhost:{PORT}/stats")
         sys.exit(1)
 
+    event_store = EventStore(EVENTS_DB)
     # save ophalen
     x4stats = X4stats(
         save_location=save_location
     )
+    sync_events()
+    if AUTO_RELOAD_SECONDS:
+        threading.Thread(target=poll_saves, args=(AUTO_RELOAD_SECONDS,), daemon=True).start()
+        print(f" * Checking for new saves every {AUTO_RELOAD_SECONDS} seconds")
+    print(" * Telegram notifications " + ("on" if notifier else "off"))
     app.run(host=HOST, port=PORT, threaded=True, debug=False)
 
 

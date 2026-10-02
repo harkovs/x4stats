@@ -723,3 +723,17 @@ a.stat-link .stat-label::after {
 .page > .stat-row + .card-grid {
   margin-top: 24px;
 }
+
+.stat-tile .stat-value.stat-value-small {
+  font-size: 1.7rem;
+  line-height: 1.3;
+  padding-top: 4px;
+}
+
+.stat-note {
+  display: block;
+  color: var(--text-muted);
+  font-family: var(--font);
+  font-size: 1.25rem;
+  font-weight: 500;
+}
