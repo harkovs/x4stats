@@ -32,6 +32,7 @@ class X4stats:
         self.game_time = None
         self.own_ships = None
         self.own_ship_ids = None
+        self.assets_by_id = {}
         self.id_aliases = {}
         self.player_id = None
         self.sales = None
@@ -197,11 +198,17 @@ class X4stats:
             print(' * Processed xml in', str(process_time), 'seconds')
 
         # Find all player owned ships and stations
-        self.own_ships, self.own_ship_ids, self.player_id = self.__calc_ship_info(
+        own_ships, player_id = self.__calc_ship_info(
             assets=assets,
             connections=connections,
             orders=default_orders)
-        self.id_aliases = self.__calc_buildstorage_aliases(assets=assets, listeners=listeners)
+        id_aliases = self.__calc_buildstorage_aliases(own_ships=own_ships, assets=assets, listeners=listeners)
+        self.own_ships = own_ships
+        self.player_id = player_id
+        self.id_aliases = id_aliases
+        # looked up for every trade, so keep these O(1)
+        self.own_ship_ids = {s["id"] for s in own_ships}
+        self.assets_by_id = {s["id"]: s for s in own_ships}
         self.print_random_load_msg()
 
         # calculate sales
@@ -236,7 +243,9 @@ class X4stats:
         player = self.get_id_attributes(self.player_id) if self.player_id else None
         return player["name"] if player else None
 
-    def get_df_sales(self, hours=None, filter_zero_value=False):
+    # exclude_internal: leave out trades between own assets, which net to zero but would count twice in totals over
+    # all assets (sales of one asset and costs of another)
+    def get_df_sales(self, hours=None, filter_zero_value=False, exclude_internal=False):
         df = self.sales.copy()
         if hours:
             # uren beginnen te tellen bij 0. Laatste 1 uur is dus uur <= 0
@@ -244,6 +253,8 @@ class X4stats:
             df = df.query("hours_since_event <= " + str(hours))
         if filter_zero_value:
             df = df.query("value != 0")
+        if exclude_internal:
+            df = df[~df["internal"]]
 
         return df
 
@@ -257,13 +268,18 @@ class X4stats:
 
     def __calc_df_per_ship(self, hours=None):
         df = self.get_df_sales(hours)
-        # a trade is a row with a ware and a value; zero-value filler rows and account mutations don't count
-        df = df.assign(trades=(df["ware"].notna()
-                               & ~df["ware"].isin(["sellship", "restock"])
-                               & (df["value"] != 0)).astype(int))
-        df_per_ship = df.groupby(["ship_id", "ship_class", "commander_name", "default_order", "ship_code", "ship_name",
-                                  "ship_type"], dropna=False)[["value", "sales", "costs", "volume", "trades"]] \
-            .sum().reset_index()
+        return self.__aggregate_ships(df.assign(trades=self.__trade_flags(df)))
+
+    # a trade is a row with a ware and a value; zero-value filler rows and account mutations don't count
+    @staticmethod
+    def __trade_flags(df):
+        return (df["ware"].notna() & ~df["ware"].isin(["sellship", "restock"]) & (df["value"] != 0)).astype(int)
+
+    # Sales rows (with a trades column) -> one row per ship/station
+    def __aggregate_ships(self, df, extra_columns=()):
+        df_per_ship = df.groupby(["ship_id", "ship_class", "commander_id", "commander_name", "default_order", "ship_code",
+                                  "ship_name", "ship_type"], dropna=False)[
+            ["value", "sales", "costs", "volume", "trades", *extra_columns]].sum().reset_index()
         df_per_ship["ship_type_name"] = df_per_ship["ship_type"].map(self.ship_type_label)
 
         df_per_ship = self.__per_x_help(df_per_ship)
@@ -336,31 +352,56 @@ class X4stats:
 
     def __calc_df_per_commander(self, hours=None):
         df = self.get_df_sales(hours)
-        df_per_com = df[["commander_name", "value", "sales", "costs", "volume"]] \
-            .groupby(["commander_name"]
+        # trades within the group cancel out, leaving them in would only inflate sales/costs/volume
+        df = df[~df["intra_group"]]
+        df_per_com = df[["commander_id", "commander_name", "value", "sales", "costs", "volume"]] \
+            .groupby(["commander_id", "commander_name"]
                      , dropna=False).sum().reset_index()
-        # print(df_per_com.head())
         df_per_com = self.__per_x_help(df_per_com)
-        # print(df_per_com)
         return df_per_com
+
+    # Wares bought and sold by one commander group (commander and its subordinates), trades within the group left out
+    def get_df_commander_wares(self, commander_id, hours=None):
+        df = self.get_df_sales(hours, filter_zero_value=True)
+        df = df[(df["commander_id"] == commander_id) & ~df["intra_group"]]
+        return self.__aggregate_wares(df).sort_values(["sales", "value"], ascending=False)
+
+    # Ships and stations of one commander group. Value/sales/costs/volume leave out trades within the group, so they add
+    # up to the commander totals; those go in group_value instead (+ delivered to the group, - taken from it). The
+    # trade count includes them, so a miner that only delivers to its station doesn't look idle.
+    def get_df_commander_ships(self, commander_id, hours=None):
+        df = self.get_df_sales(hours)
+        df = df[df["commander_id"] == commander_id]
+        external = ~df["intra_group"]
+        df = df.assign(trades=self.__trade_flags(df),
+                       group_value=df["value"].where(~external, 0),
+                       value=df["value"].where(external, 0),
+                       sales=df["sales"].where(external, 0),
+                       costs=df["costs"].where(external, 0),
+                       volume=df["volume"].where(external, 0))
+        return self.__aggregate_ships(df, extra_columns=["group_value"]).sort_values("value", ascending=False)
 
     def get_df_per_ware(self, hours=None):
         return self.__calc_df_per_ware(hours)
 
     def __calc_df_per_ware(self, hours=None):
-        df = self.get_df_sales(hours, filter_zero_value=True)
+        df = self.get_df_sales(hours, filter_zero_value=True, exclude_internal=True)
+        return self.__aggregate_wares(df).sort_values("value", ascending=False)
+
+    # Sales rows -> one row per ware, with sold and bought volume split out
+    def __aggregate_wares(self, df):
         df = df[df["ware"].notna()]
-        df_per_ware = df[["ware", "value", "sales", "costs", "volume"]] \
+        df = df.assign(sold_volume=df["volume"].where(df["sales"] > 0, 0),
+                       bought_volume=df["volume"].where(df["costs"] > 0, 0))
+        df_per_ware = df[["ware", "value", "sales", "costs", "volume", "sold_volume", "bought_volume"]] \
             .groupby(["ware"], dropna=False).sum().reset_index()
-        df_per_ware = self.__per_x_help(df_per_ware)
-        df_per_ware = df_per_ware.sort_values("value", ascending=False)
-        return df_per_ware
+        return self.__per_x_help(df_per_ware)
 
     def get_df_per_hour_ware(self, hours=None):
         return self.__calc_df_per_hour_ware(hours)
 
     def __calc_df_per_hour_ware(self, hours=None):
-        df = self.get_df_sales(hours, filter_zero_value=True)
+        df = self.get_df_sales(hours, filter_zero_value=True, exclude_internal=True)
         df = df[df["ware"].notna()]
         df_per_hour_ware = df[["hours_since_event", "ware", "value", "sales", "costs", "volume"]] \
             .groupby(["hours_since_event", "ware"], dropna=False).sum().reset_index()
@@ -408,6 +449,7 @@ class X4stats:
                         "costs": 0,
                         "volume": volume,
                         "ware": elem["ware"],
+                        "partner_id": elem.get("buyer"),
                     }
                     sales_list = self.__append_sales_list(sales_list, sale)
 
@@ -423,6 +465,7 @@ class X4stats:
                         "costs": costs,
                         "volume": volume,
                         "ware": elem["ware"],
+                        "partner_id": elem.get("seller"),
                     }
                     sales_list = self.__append_sales_list(sales_list, sale)
 
@@ -433,7 +476,7 @@ class X4stats:
 
         # Add ships with trade/mine orders and stations to make sure they are displayed even without trade value.
         for ship in self.own_ships:
-            if ship["class"] in (SHIP_CLASSES + PLAYER_CLASSES) or ship["default_order"]:
+            if ship["class"] in (SHIP_CLASSES + STATION_CLASSES + PLAYER_CLASSES) or ship["default_order"]:
                 sale = {
                     "time": self.game_time,
                     "ship_id": ship["id"],
@@ -474,13 +517,23 @@ class X4stats:
     def __append_sales_list(self, sales_list, sale):
 
         atts = self.get_id_attributes(sale["ship_id"])
+        # A trade with another asset under the same commander (e.g. a station's miner selling to that station) shows
+        # up as a sale on one side and a purchase on the other. It nets to zero for the commander, but would inflate
+        # its sales, costs and volume.
+        partner_id = sale.get("partner_id")
+        partner = self.get_id_attributes(partner_id)
         sales_list.append({
             "ship_id": sale["ship_id"],
             "ship_type": atts["type"],
             "ship_class": atts["class"],
             "ship_name": atts["name"],
             "ship_code": atts["code"],
+            "commander_id": atts["commander_id"],
             "commander_name": atts["commander_name"],
+            "partner_id": partner_id,
+            # trade with another own asset: both sides are in the data, so totals over all assets count it twice
+            "internal": partner is not None,
+            "intra_group": partner is not None and partner["commander_id"] == atts["commander_id"],
             "default_order": atts["default_order"],
             "time": sale["time"],
             "ware": sale["ware"],
@@ -493,11 +546,20 @@ class X4stats:
         #     print(str(sales_list[-1]))
         return sales_list
 
-    # Return tuple with players ship/station info and ids
+    # Return tuple with players ship/station info and the player id
     def __calc_ship_info(self, assets, connections, orders):
         info = []
-        ids = []
         player_id = None
+
+        # index by entity once instead of scanning all connections/orders for every asset
+        subordinate_cons_by_entity = {}
+        commander_cons_by_entity = {}
+        for con in connections:
+            if con['connection_type'] == 'subordinates':
+                subordinate_cons_by_entity.setdefault(con['player_entity'], []).append(con['connection_id'])
+            elif con['connection_type'] == 'commander':
+                commander_cons_by_entity.setdefault(con['player_entity'], []).append(con['connection'])
+        default_order_by_entity = {o['player_entity']: o['order'] for o in orders}
 
         for elem in assets:
 
@@ -507,7 +569,6 @@ class X4stats:
                     ship_type = None
                     ship_id = None
                     code = None
-                    subordinates_cons = []
                     commander_cons = []
                     commander_id = None
                     commander_name = None
@@ -526,21 +587,13 @@ class X4stats:
                     else:
                         name = code
 
-                    if ship_class in STATION_CLASSES:
-                        # subordinate connections zoeken voor stations
-                        for con in connections:
-                            if con['player_entity'] == ship_id and con['connection_type'] == 'subordinates':
-                                subordinates_cons.append(con['connection_id'])
+                    # subordinate connections (stations en schepen kunnen commander zijn)
+                    subordinates_cons = subordinate_cons_by_entity.get(ship_id, [])
 
-                    # commander connections zoeken voor schepen
+                    # commander connections en default order voor schepen
                     if ship_class in SHIP_CLASSES:
-                        for con in connections:
-                            if con['player_entity'] == ship_id and con['connection_type'] == 'commander':
-                                commander_cons.append(con["connection"])
-                        # default orders opzoeken
-                        for d_order in orders:
-                            if d_order['player_entity'] == ship_id:
-                                default_order = d_order["order"]
+                        commander_cons = commander_cons_by_entity.get(ship_id, [])
+                        default_order = default_order_by_entity.get(ship_id)
 
                     info.append({
                         "type": ship_type,
@@ -554,7 +607,6 @@ class X4stats:
                         "commander_name": commander_name,
                         "default_order": default_order,
                     })
-                    ids.append(ship_id)
 
                     if ship_class in PLAYER_CLASSES:
                         player_id = info[-1]["id"]
@@ -563,29 +615,31 @@ class X4stats:
                     print(str(e))
                     print(elem)
 
-        # stations aan schepen verbinden
+        # direct commander of every asset with exactly 1 commander connection
+        commander_by_con = {con: c for c in info for con in c["subordinate_cons"]}
+        direct_commander = {}
         for e in info:
-            # schip heeft 1 commander
-            if len(e["commander_cons"]) == 1:
-                # zoek commander id
-                for c in info:
-                    if e["commander_cons"][0] in c["subordinate_cons"]:
-                        e["commander_id"] = c["id"]
-                        e["commander_name"] = c["name"]
-            else:
-                # Bij geen commander ben je eigen baas tbv groepering per commander
-                e["commander_id"] = e["id"]
-                e["commander_name"] = e["name"]
+            if len(e["commander_cons"]) == 1 and e["commander_cons"][0] in commander_by_con:
+                direct_commander[e["id"]] = commander_by_con[e["commander_cons"][0]]
 
-        # for i in info:
-        #     print(i)
-        return info, ids, player_id
+        # Group under the top of the chain (station -> ship -> wing ship all go to the station), so a group always
+        # contains its commander. Bij geen (gevonden) commander ben je eigen baas.
+        for e in info:
+            top = e
+            seen = {e["id"]}
+            while top["id"] in direct_commander and direct_commander[top["id"]]["id"] not in seen:
+                top = direct_commander[top["id"]]
+                seen.add(top["id"])
+            e["commander_id"] = top["id"]
+            e["commander_name"] = top["name"]
+
+        return info, player_id
 
     # Map player build storage ids to the id of the station they build. A station lists its build storage as a
     # 'killed' listener. Build storages without a station are kept as their own entry so their trades still count.
-    def __calc_buildstorage_aliases(self, assets, listeners):
+    def __calc_buildstorage_aliases(self, own_ships, assets, listeners):
         aliases = {}
-        station_ids = {s["id"] for s in self.own_ships if s["class"] in STATION_CLASSES}
+        station_ids = {s["id"] for s in own_ships if s["class"] in STATION_CLASSES}
         for elem in assets:
             if elem.get("class") not in BUILDSTORAGE_CLASSES:
                 continue
@@ -596,7 +650,7 @@ class X4stats:
                     break
             else:
                 name = "Build storage " + elem.get("code", bs_id)
-                self.own_ships.append({
+                own_ships.append({
                     "type": elem.get("macro"),
                     "id": bs_id,
                     "name": name,
@@ -608,14 +662,10 @@ class X4stats:
                     "commander_name": name,
                     "default_order": None,
                 })
-                self.own_ship_ids.append(bs_id)
         return aliases
 
     def get_id_attributes(self, ship_id):
-        for c in self.own_ships:
-            if c["id"] == ship_id:
-                return c
-        return None
+        return self.assets_by_id.get(ship_id)
 
     def hours_passed(self, time):
         return math.floor((self.game_time - time) / 3600)
@@ -681,7 +731,7 @@ class X4stats:
             if float(m["value"]) >= 0:
                 sales = float(m["value"])
             else:
-                costs = float(m["value"])
+                costs = -float(m["value"])
 
             if m["type"] in ('sellship', 'restock') and m["owner"] != self.player_id:
 

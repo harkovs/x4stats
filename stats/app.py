@@ -106,14 +106,17 @@ def inject_shell():
         'player_name': x4stats.get_player_name(),
         'game_hours': round(x4stats.get_game_time() / 3600, 1),
         'save_version': x4stats.get_save_version(),
+        # page-specific query arguments that the hour filter and "Update save" link keep
+        'page_args': {},
     }
 
 
-def get_commander_chart_data(df):
-    df = df.sort_values('value', ascending=False)
+# links: one URL per row of df, opened when its bar is clicked
+def get_commander_chart_data(df, links):
     return {
         'labels': [str(v) for v in df['commander_name']],
         'values': [float(v) for v in df['value']],
+        'links': links,
     }
 
 
@@ -182,7 +185,7 @@ def table_columns_ship(df):
         'number' if c in ('sales', 'costs', 'volume', 'trades') else
         'percent' if c == 'margin' else
         'text'
-    )} for c in df.columns]
+    )} for c in df.columns if c != 'commander_id']
 
 
 TABLE_COLUMNS_INACTIVE = [
@@ -242,6 +245,28 @@ TABLE_COLUMNS_TOP_WARES = [
     {'key': 'margin', 'label': 'margin', 'type': 'percent'},
 ]
 
+TABLE_COLUMNS_COMMANDER_WARES = [
+    {'key': 'ware', 'label': 'ware', 'type': 'text'},
+    {'key': 'sold_volume', 'label': 'volume sold', 'type': 'number'},
+    {'key': 'sales', 'label': 'total sales', 'type': 'number'},
+    {'key': 'bought_volume', 'label': 'volume bought', 'type': 'number'},
+    {'key': 'costs', 'label': 'total bought', 'type': 'number'},
+    {'key': 'value', 'label': 'profit', 'type': 'money'},
+    {'key': 'margin', 'label': 'margin', 'type': 'percent'},
+]
+
+TABLE_COLUMNS_COMMANDER_SHIPS = [
+    {'key': 'ship_name', 'label': 'name', 'type': 'text'},
+    {'key': 'ship_code', 'label': 'code', 'type': 'text'},
+    {'key': 'ship_type_name', 'label': 'type', 'type': 'text'},
+    {'key': 'default_order', 'label': 'order', 'type': 'text'},
+    {'key': 'trades', 'label': 'trades', 'type': 'number'},
+    {'key': 'volume', 'label': 'volume', 'type': 'number'},
+    {'key': 'value', 'label': 'profit', 'type': 'money'},
+    {'key': 'group_value', 'label': 'to own group', 'type': 'money'},
+    {'key': 'margin', 'label': 'margin', 'type': 'percent'},
+]
+
 TABLE_COLUMNS_DESTROYED = [
     {'key': 'game_hours', 'label': 'game time (h)', 'type': 'decimal'},
     {'key': 'hours_ago', 'label': 'hours ago', 'type': 'number'},
@@ -285,6 +310,8 @@ def value_class(v):
 
 # Pages the "Update save" link may return to
 PAGES = ['stats', 'trends', 'commanders', 'wares', 'ships', 'idle', 'losses', 'transactions']
+# Page query arguments the "Update save" link passes back (see page_args)
+PAGE_ARGS = ['commander']
 
 
 @app.route('/', methods=['GET'])
@@ -295,7 +322,7 @@ def index():
 @app.route('/stats', methods=['GET'])
 @app.route('/stats/<int:hours>', methods=['GET'])
 def stats(hours=None):
-    df_sales = x4stats.get_df_sales(hours, filter_zero_value=True)
+    df_sales = x4stats.get_df_sales(hours, filter_zero_value=True, exclude_internal=True)
     df_per_ware = x4stats.get_df_per_ware(hours)
     df_ships = x4stats.get_df_ships(hours)
 
@@ -339,11 +366,44 @@ def trends(hours=None):
 @app.route('/commanders', methods=['GET'])
 @app.route('/commanders/<int:hours>', methods=['GET'])
 def commanders(hours=None):
-    df_per_commander = x4stats.get_df_per_commander(hours)
+    df_per_commander = x4stats.get_df_per_commander(hours).sort_values('value', ascending=False)
+    links = [url_for('commanders', hours=hours, commander=v) for v in df_per_commander['commander_id']]
+    options = [{'id': r['commander_id'], 'name': r['commander_name'], 'value': r['value'], 'url': link}
+               for r, link in zip(df_per_commander.to_dict('records'), links)]
+
+    # ?commander=<id> shows the wares and ships of that commander group
+    selected = None
+    commander_id = request.args.get('commander')
+    match = df_per_commander[df_per_commander['commander_id'] == commander_id]
+    if len(match):
+        row = match.iloc[0]
+        df_wares = x4stats.get_df_commander_wares(commander_id, hours)
+        df_ships = x4stats.get_df_commander_ships(commander_id, hours)
+        selected = {
+            'id': commander_id,
+            'name': row['commander_name'],
+            'profit': float(row['value']),
+            'profit_class': value_class(row['value']),
+            'sales': float(row['sales']),
+            'costs': float(row['costs']),
+            'margin': float(row['margin']),
+            'margin_class': value_class(row['margin']),
+            'ship_count': len(df_ships),
+            'sales_pie': get_ware_pie_data(df_wares, 'sales'),
+            'ware_rows': df_wares.to_dict('records'),
+            'ship_rows': df_ships.to_dict('records'),
+        }
+
     return render_template(
         'commanders.html',
-        commander_chart=get_commander_chart_data(df_per_commander),
+        commander_chart=get_commander_chart_data(df_per_commander, links),
         scatter_data=get_scatter_data(df_per_commander),
+        commander_options=options,
+        selected=selected,
+        clear_url=url_for('commanders', hours=hours),
+        ware_columns=TABLE_COLUMNS_COMMANDER_WARES,
+        ship_columns=TABLE_COLUMNS_COMMANDER_SHIPS,
+        page_args={'commander': selected['id']} if selected else {},
         **hours_context(hours),
     )
 
@@ -463,7 +523,8 @@ def reload(hours=None):
     page = request.args.get('next')
     if page not in PAGES:
         page = 'stats'
-    return redirect(url_for(page, hours=hours) if hours else url_for(page))
+    args = {k: request.args[k] for k in PAGE_ARGS if k in request.args}
+    return redirect(url_for(page, hours=hours, **args))
 
 
 def port_in_use(host, port):

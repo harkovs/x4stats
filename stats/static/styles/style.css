@@ -345,6 +345,54 @@ a:hover {
   font-weight: 600;
 }
 
+/* ---------- Commander picker ---------- */
+
+.commander-picker {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin: -12px 0 24px;
+}
+
+.commander-picker label {
+  color: var(--text-muted);
+  font-size: 1.3rem;
+}
+
+.select {
+  min-width: 0;
+  max-width: 100%;
+  background-color: var(--surface-hover);
+  border: 1px solid transparent;
+  border-radius: 999px;
+  color: var(--text-primary);
+  font-family: var(--font);
+  font-size: 1.35rem;
+  padding: 7px 16px;
+  cursor: pointer;
+}
+
+.select:hover {
+  border-color: var(--border-strong);
+}
+
+.select:focus {
+  outline: none;
+  border-color: var(--text-primary);
+}
+
+.select option {
+  background-color: var(--surface);
+}
+
+.card-hint {
+  color: var(--text-muted);
+  font-size: 1.2rem;
+  font-weight: 500;
+  margin-left: 8px;
+}
+
 /* ---------- Ware toggles ---------- */
 
 .ware-toggle-row {

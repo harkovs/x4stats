@@ -1,8 +1,8 @@
-{% macro hour_filter(endpoint, current) %}
+{% macro hour_filter(endpoint, current, args={}) %}
 <div class="pill-group">
-    <a class="pill {{ 'active' if current == '' else '' }}" href="{{ url_for(endpoint) }}">All</a>
+    <a class="pill {{ 'active' if current == '' else '' }}" href="{{ url_for(endpoint, **args) }}">All</a>
     {% for h in [1, 2, 3, 5, 10, 25] %}
-    <a class="pill {{ 'active' if current == h|string else '' }}" href="{{ url_for(endpoint, hours=h) }}">{{ h }}h</a>
+    <a class="pill {{ 'active' if current == h|string else '' }}" href="{{ url_for(endpoint, hours=h, **args) }}">{{ h }}h</a>
     {% endfor %}
 </div>
 {% endmacro %}
