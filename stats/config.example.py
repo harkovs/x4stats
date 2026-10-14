@@ -7,7 +7,7 @@ SAVE_LOCATION = r"C:\Users\<your_username>\Documents\Egosoft\X4\<random_number>\
 # How often to check SAVE_LOCATION for a newer save in the background, in seconds. 0 = only on "Update save".
 # AUTO_RELOAD_SECONDS = 60
 
-# Local SQLite history of destroyed/attacked ships and stations, per game.
+# Local SQLite history of destroyed/attacked ships and stations and the last known orders of your ships, per game.
 # EVENTS_DB = "stats/saves/events.sqlite"
 
 # Telegram alerts for newly detected losses. Create a bot with @BotFather for the token; the chat id is your own
