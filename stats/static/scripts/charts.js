@@ -113,7 +113,8 @@
           },
           scales: scales,
           // with links, the whole column is clickable, so zero/tiny bars can be picked too
-          interaction: opts.links ? { mode: 'index', intersect: false } : undefined,
+          // axis: pick the bar along the label axis, also for horizontal bars
+          interaction: opts.links ? { mode: 'index', axis: labelAxis, intersect: false } : undefined,
           onClick: opts.links ? function (evt, elements) {
             if (elements.length) location.href = opts.links[elements[0].index];
           } : undefined,

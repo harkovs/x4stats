@@ -59,9 +59,10 @@ def unlock_data(exc):
         data_lock.release()
 
 
-# Store loss/attack events of the loaded save and send notifications for ones not seen before
+# Store loss/attack events and own assets of the loaded save and send notifications for events not seen before
 def sync_events():
-    new, first_import = event_store.record(x4stats.get_game_guid(), x4stats.get_loss_events())
+    new, first_import = event_store.record(x4stats.get_game_guid(), x4stats.get_loss_events(),
+                                           assets=x4stats.get_fleet(), game_time=x4stats.get_game_time())
     if new:
         print(f" * {len(new)} new loss/attack events" + (" (first import, no notifications)" if first_import else ""))
     if not notifier or first_import:
@@ -272,8 +273,11 @@ TABLE_COLUMNS_DESTROYED = [
     {'key': 'hours_ago', 'label': 'hours ago', 'type': 'number'},
     {'key': 'name', 'label': 'name', 'type': 'text'},
     {'key': 'code', 'label': 'code', 'type': 'text'},
+    {'key': 'ship_type_name', 'label': 'type', 'type': 'text'},
     {'key': 'location', 'label': 'location', 'type': 'text'},
     {'key': 'commander', 'label': 'commander', 'type': 'text'},
+    {'key': 'default_order', 'label': 'default order', 'type': 'text'},
+    {'key': 'orders', 'label': 'last orders', 'type': 'text'},
     {'key': 'attacker', 'label': 'destroyed by', 'type': 'text'},
 ]
 
@@ -281,7 +285,11 @@ TABLE_COLUMNS_ATTACKED = [
     {'key': 'game_hours', 'label': 'game time (h)', 'type': 'decimal'},
     {'key': 'hours_ago', 'label': 'hours ago', 'type': 'number'},
     {'key': 'name', 'label': 'name', 'type': 'text'},
+    {'key': 'ship_type_name', 'label': 'type', 'type': 'text'},
     {'key': 'location', 'label': 'location', 'type': 'text'},
+    {'key': 'commander', 'label': 'commander', 'type': 'text'},
+    {'key': 'default_order', 'label': 'default order', 'type': 'text'},
+    {'key': 'orders', 'label': 'orders', 'type': 'text'},
     {'key': 'attacker', 'label': 'attacked by', 'type': 'text'},
 ]
 
@@ -471,6 +479,7 @@ def get_loss_events(hours=None):
         if hours and hours_ago > int(hours) - 1:
             continue
         events.append({**e, 'hours_ago': hours_ago, 'game_hours': e['time'] / 3600,
+                       'ship_type_name': x4stats.ship_type_label(e['ship_type']),
                        'what': 'Destroyed' if e['kind'] == 'destroyed' else 'Attacked'})
     return events
 

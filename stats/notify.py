@@ -22,11 +22,21 @@ class TelegramNotifier:
             return False
 
 
+# Telegram rejects longer messages; a field (an order queue can be long) is cut off well before that
+MAX_MESSAGE_LENGTH = 4096
+MAX_FIELD_LENGTH = 300
+
+
+def shorten(text, length):
+    return text if len(text) <= length else text[:length - 1] + "\u2026"
+
+
 def format_event(event):
     what = "destroyed" if event["kind"] == "destroyed" else "attacked and forced to flee"
     name = event["name"] + (f" ({event['code']})" if event.get("code") else "")
     lines = [f"X4: {name} was {what}"]
-    for label, key in (("Location", "location"), ("Commander", "commander"), ("By", "attacker")):
+    for label, key in (("Location", "location"), ("Commander", "commander"), ("Default order", "default_order"),
+                       ("Orders", "orders"), ("By", "attacker")):
         if event.get(key):
-            lines.append(f"{label}: {event[key]}")
-    return "\n".join(lines)
+            lines.append(f"{label}: {shorten(event[key], MAX_FIELD_LENGTH)}")
+    return shorten("\n".join(lines), MAX_MESSAGE_LENGTH)

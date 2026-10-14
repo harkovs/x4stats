@@ -21,6 +21,8 @@ LOSS_BY_TITLE = re.compile(r"^(?P<name>.+?) in sector (?P<location>.+?) was dest
 # "FD-TSM Runa Jung was forced to flee after being attacked by BUC Corsair Prometheus in Morning Star IV. ..."
 ATTACKED_TITLE = re.compile(
     r"^(?P<name>.+?) was forced to flee after being attacked by (?P<attacker>.+?) in (?P<location>.+?)\. ")
+# Station account mutations are stored as sales rows with the mutation type as ware. They are not trades or wares.
+ACCOUNT_MUTATIONS = ["sellship", "restock"]
 
 
 class X4stats:
@@ -86,6 +88,8 @@ class X4stats:
         transfers = []
         log_entries = []
         default_orders = []
+        # non-default orders in queue order; the first one is being executed
+        queued_orders = []
         # Type of entry
         entries_type = None
         entries_condensed = False
@@ -98,15 +102,22 @@ class X4stats:
         cur_connection_type = None
         cur_connection_id = None
         connection_types = ['subordinates', 'commander']
+        # ids of all player owned components, known once the universe is read (it comes before the economy log). Used
+        # to keep only the trades and transfers of the player, the log also has those of every other faction.
+        player_ids = None
 
         with gzip.open(save) as f:
             path = []
+            # open elements; a finished element is removed from its parent, elem.clear() alone leaves an empty
+            # element behind for every node until its parent closes (the whole universe)
+            elems = []
             xml = ET.iterparse(f, events=('start', 'end'))
 
             # Build path with every start and remove with every end event
             for event, elem in xml:
                 if event == 'start':
                     path.append(elem.tag)
+                    elems.append(elem)
                     # Get game start time
                     if path == ['savegame', 'info', 'game']:
                         self.game_time = float(elem.attrib['time'])
@@ -115,6 +126,8 @@ class X4stats:
                     # logbook messages about the player's own assets (attacks, losses, ...)
                     elif path == ['savegame', 'log', 'entry'] and elem.attrib.get('category') == 'upkeep':
                         log_entries.append(elem.attrib)
+                    elif path == ['savegame', 'economylog']:
+                        player_ids = {a['id'] for a in assets if 'id' in a}
                     elif path == ['savegame', 'economylog', 'entries']:
                         entries_type = elem.attrib['type']
                         # check for condensed money log
@@ -124,11 +137,13 @@ class X4stats:
                             entries_condensed = False
                     # get trades
                     elif path == ['savegame', 'economylog', 'entries', 'log'] and entries_type == 'trade':
-                        trades.append(elem.attrib)
+                        if (player_ids is None or elem.attrib.get('seller') in player_ids
+                                or elem.attrib.get('buyer') in player_ids):
+                            trades.append(elem.attrib)
                     # Get money transfers
                     elif path == ['savegame', 'economylog', 'entries', 'log'] and entries_type == 'money':
                         # Only include uncondensed transfers
-                        if not entries_condensed:
+                        if not entries_condensed and (player_ids is None or elem.attrib.get('owner') in player_ids):
                             transfers.append(elem.attrib)
                     # get player asset info
                     elif (path[0:4] == ['savegame', 'universe', 'component', 'connections']
@@ -173,6 +188,16 @@ class X4stats:
                             'player_entity': cur_player_entity,
                             'order': elem.attrib['order']
                         })
+                    # order queue of the entity itself (component/orders/order)
+                    elif (cur_player_entity
+                          and elem.tag == 'order'
+                          and 'order' in elem.attrib
+                          and path[-2] == 'orders'
+                          and len(path) == entity_stack[-1][1] + 2):
+                        queued_orders.append({
+                            'player_entity': cur_player_entity,
+                            'order': elem.attrib['order']
+                        })
                 if event == 'end':
                     # remove current player ship entry
                     if (path[0:4] == ['savegame', 'universe', 'component', 'connections']
@@ -190,6 +215,10 @@ class X4stats:
                     path.pop()
                     # clear elem from memory
                     elem.clear()
+                    elems.pop()
+                    if elems:
+                        # earlier siblings are already removed, so this is the only child
+                        elems[-1].remove(elem)
 
             process_end_time = datetime.datetime.now()
             process_time = process_end_time - process_start_time
@@ -201,7 +230,8 @@ class X4stats:
         own_ships, player_id = self.__calc_ship_info(
             assets=assets,
             connections=connections,
-            orders=default_orders)
+            orders=default_orders,
+            queued_orders=queued_orders)
         id_aliases = self.__calc_buildstorage_aliases(own_ships=own_ships, assets=assets, listeners=listeners)
         self.own_ships = own_ships
         self.player_id = player_id
@@ -239,6 +269,18 @@ class X4stats:
     def get_loss_events(self):
         return self.loss_events
 
+    # Own ships and stations with their commander and orders, to remember what lost assets were doing
+    def get_fleet(self):
+        return [{
+            "id": s["id"],
+            "code": s["code"],
+            "name": s["name"],
+            "ship_type": s["type"],
+            "commander": s["direct_commander_name"],
+            "default_order": s["default_order"],
+            "orders": " > ".join(s["orders"]) or None,
+        } for s in self.own_ships if s["class"] in SHIP_CLASSES + STATION_CLASSES]
+
     def get_player_name(self):
         player = self.get_id_attributes(self.player_id) if self.player_id else None
         return player["name"] if player else None
@@ -273,7 +315,7 @@ class X4stats:
     # a trade is a row with a ware and a value; zero-value filler rows and account mutations don't count
     @staticmethod
     def __trade_flags(df):
-        return (df["ware"].notna() & ~df["ware"].isin(["sellship", "restock"]) & (df["value"] != 0)).astype(int)
+        return (df["ware"].notna() & ~df["ware"].isin(ACCOUNT_MUTATIONS) & (df["value"] != 0)).astype(int)
 
     # Sales rows (with a trades column) -> one row per ship/station
     def __aggregate_ships(self, df, extra_columns=()):
@@ -390,7 +432,7 @@ class X4stats:
 
     # Sales rows -> one row per ware, with sold and bought volume split out
     def __aggregate_wares(self, df):
-        df = df[df["ware"].notna()]
+        df = df[df["ware"].notna() & ~df["ware"].isin(ACCOUNT_MUTATIONS)]
         df = df.assign(sold_volume=df["volume"].where(df["sales"] > 0, 0),
                        bought_volume=df["volume"].where(df["costs"] > 0, 0))
         df_per_ware = df[["ware", "value", "sales", "costs", "volume", "sold_volume", "bought_volume"]] \
@@ -402,7 +444,7 @@ class X4stats:
 
     def __calc_df_per_hour_ware(self, hours=None):
         df = self.get_df_sales(hours, filter_zero_value=True, exclude_internal=True)
-        df = df[df["ware"].notna()]
+        df = df[df["ware"].notna() & ~df["ware"].isin(ACCOUNT_MUTATIONS)]
         df_per_hour_ware = df[["hours_since_event", "ware", "value", "sales", "costs", "volume"]] \
             .groupby(["hours_since_event", "ware"], dropna=False).sum().reset_index()
         df_per_hour_ware = self.__per_x_help(df_per_hour_ware)
@@ -547,7 +589,7 @@ class X4stats:
         return sales_list
 
     # Return tuple with players ship/station info and the player id
-    def __calc_ship_info(self, assets, connections, orders):
+    def __calc_ship_info(self, assets, connections, orders, queued_orders):
         info = []
         player_id = None
 
@@ -560,6 +602,9 @@ class X4stats:
             elif con['connection_type'] == 'commander':
                 commander_cons_by_entity.setdefault(con['player_entity'], []).append(con['connection'])
         default_order_by_entity = {o['player_entity']: o['order'] for o in orders}
+        queued_orders_by_entity = {}
+        for o in queued_orders:
+            queued_orders_by_entity.setdefault(o['player_entity'], []).append(o['order'])
 
         for elem in assets:
 
@@ -606,6 +651,7 @@ class X4stats:
                         "commander_id": commander_id,
                         "commander_name": commander_name,
                         "default_order": default_order,
+                        "orders": queued_orders_by_entity.get(ship_id, []),
                     })
 
                     if ship_class in PLAYER_CLASSES:
@@ -632,6 +678,7 @@ class X4stats:
                 seen.add(top["id"])
             e["commander_id"] = top["id"]
             e["commander_name"] = top["name"]
+            e["direct_commander_name"] = direct_commander[e["id"]]["name"] if e["id"] in direct_commander else None
 
         return info, player_id
 
@@ -661,6 +708,8 @@ class X4stats:
                     "commander_id": bs_id,
                     "commander_name": name,
                     "default_order": None,
+                    "orders": [],
+                    "direct_commander_name": None,
                 })
         return aliases
 
@@ -733,7 +782,7 @@ class X4stats:
             else:
                 costs = -float(m["value"])
 
-            if m["type"] in ('sellship', 'restock') and m["owner"] != self.player_id:
+            if m["type"] in ACCOUNT_MUTATIONS and m["owner"] != self.player_id:
 
                 sale = {
                     "time": m["time"],
@@ -790,7 +839,9 @@ class X4stats:
                          "attacker": details.get("Destroyed by")}
 
             if event:
-                event.update({"time": float(entry["time"]), "title": title, "text": text})
+                # the logbook entry links to the own asset it is about, which survives renames
+                event.update({"time": float(entry["time"]), "title": title, "text": text,
+                              "asset_id": entry.get("component")})
                 events.append(event)
         return events
 
