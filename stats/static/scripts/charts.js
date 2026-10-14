@@ -82,6 +82,7 @@
     wareColor: wareColor,
 
     // opts.horizontal: bars along the y axis (for long labels). Negative bars are drawn in the critical colour.
+    // opts.links: one URL per bar, opened when the bar is clicked.
     bar: function (canvasId, labels, values, opts) {
       var el = document.getElementById(canvasId);
       if (!el) return;
@@ -111,6 +112,15 @@
             tooltip: { callbacks: { label: function (ctx) { return money(ctx.parsed[valueAxis]); } } },
           },
           scales: scales,
+          // with links, the whole column is clickable, so zero/tiny bars can be picked too
+          // axis: pick the bar along the label axis, also for horizontal bars
+          interaction: opts.links ? { mode: 'index', axis: labelAxis, intersect: false } : undefined,
+          onClick: opts.links ? function (evt, elements) {
+            if (elements.length) location.href = opts.links[elements[0].index];
+          } : undefined,
+          onHover: opts.links ? function (evt, elements) {
+            evt.native.target.style.cursor = elements.length ? 'pointer' : 'default';
+          } : undefined,
         },
       });
     },

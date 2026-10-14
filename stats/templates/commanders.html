@@ -5,13 +5,68 @@
 <div class="page">
     <div class="page-header">
         <h1>Commanders</h1>
-        <span class="subtitle">Showing {{ hours | safe }} &middot; ships grouped under their commander, unassigned ships stand alone</span>
+        <span class="subtitle">Showing {{ hours | safe }} &middot; ships grouped under their commander, unassigned ships stand alone &middot; trades within a group are left out, they cancel out</span>
     </div>
 
-    {{ macros.hour_filter('commanders', hours_raw) }}
+    {{ macros.hour_filter('commanders', hours_raw, page_args) }}
+
+    <div class="commander-picker">
+        <label for="commander-select">Commander</label>
+        <select id="commander-select" class="select" onchange="location.href = this.value">
+            <option value="{{ clear_url }}">Choose a commander&hellip;</option>
+            {% for c in commander_options %}
+            <option value="{{ c.url }}" {{ 'selected' if selected and c.id == selected.id else '' }}>{{ c.name }} ({{ c.value | money }})</option>
+            {% endfor %}
+        </select>
+        {% if selected %}<a class="pill" href="{{ clear_url }}">Clear</a>{% endif %}
+    </div>
+
+    {% if selected %}
+    <h2 class="section-title">{{ selected.name }}</h2>
+    <div class="stat-row">
+        <div class="stat-tile">
+            <div class="stat-label">Profit</div>
+            <div class="stat-value {{ selected.profit_class }}">{{ selected.profit | money }}</div>
+        </div>
+        <div class="stat-tile">
+            <div class="stat-label">Total sales</div>
+            <div class="stat-value">{{ selected.sales | money }}</div>
+        </div>
+        <div class="stat-tile">
+            <div class="stat-label">Total bought</div>
+            <div class="stat-value">{{ selected.costs | money }}</div>
+        </div>
+        <div class="stat-tile">
+            <div class="stat-label">Margin</div>
+            <div class="stat-value {{ selected.margin_class }}">{{ (selected.margin * 100) | round(1) }}%</div>
+        </div>
+        <div class="stat-tile">
+            <div class="stat-label">Ships &amp; stations</div>
+            <div class="stat-value">{{ selected.ship_count }}</div>
+        </div>
+    </div>
+
+    <div class="card-grid">
+        <div class="card">
+            <h2>Wares sold</h2>
+            <div class="chart-container">
+                <canvas id="commander-sales-pie"></canvas>
+            </div>
+        </div>
+        <div class="card">
+            <h2>Ships &amp; stations</h2>
+            <div class="table-scroll">{{ macros.data_table(ship_columns, selected.ship_rows, 'commander-ship-table', searchable=False) }}</div>
+        </div>
+    </div>
 
     <div class="card">
-        <h2>Trade value per commander</h2>
+        <h2>Wares (sorted by sales)</h2>
+        <div class="table-scroll">{{ macros.data_table(ware_columns, selected.ware_rows, 'commander-ware-table') }}</div>
+    </div>
+    {% endif %}
+
+    <div class="card">
+        <h2>Trade value per commander <span class="card-hint">click a bar for details</span></h2>
         <div class="chart-container chart-tall">
             <canvas id="commander-chart"></canvas>
         </div>
@@ -29,8 +84,12 @@
 document.addEventListener('DOMContentLoaded', function () {
     var commanderChart = {{ commander_chart | tojson }};
     var scatterData = {{ scatter_data | tojson }};
-    X4Charts.bar('commander-chart', commanderChart.labels, commanderChart.values);
+    X4Charts.bar('commander-chart', commanderChart.labels, commanderChart.values, { links: commanderChart.links });
     X4Charts.scatter('scatter-chart', scatterData);
+    {% if selected %}
+    var salesPie = {{ selected.sales_pie | tojson }};
+    X4Charts.pie('commander-sales-pie', salesPie.labels, salesPie.values);
+    {% endif %}
 });
 </script>
 {% endblock %}

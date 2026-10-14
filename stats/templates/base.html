@@ -63,7 +63,7 @@
     </nav>
 
     <nav class="nav-group nav-bottom">
-        <a href="{{ url_for('reload', hours=hours_raw, next=request.endpoint) if hours_raw else url_for('reload', next=request.endpoint) }}" class="nav-item nav-cta" title="Update save">
+        <a href="{{ url_for('reload', hours=hours_raw or none, next=request.endpoint, **page_args) }}" class="nav-item nav-cta" title="Update save">
             {{ icon('reload') }}<span class="nav-label">Update save</span>
         </a>
         <button type="button" class="nav-item" id="sidebar-toggle" title="Collapse">

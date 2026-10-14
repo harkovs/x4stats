@@ -5,7 +5,7 @@
 <div class="page">
     <div class="page-header">
         <h1>Trends</h1>
-        <span class="subtitle">Showing {{ hours | safe }} &middot; per hour, per ware</span>
+        <span class="subtitle">Showing {{ hours | safe }} &middot; per hour, per ware &middot; trades between your own ships and stations are left out</span>
     </div>
 
     {{ macros.hour_filter('trends', hours_raw) }}
